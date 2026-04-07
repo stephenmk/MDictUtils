@@ -1,0 +1,6 @@
+apple
+A fruit that grows on trees.
+</>
+banana
+A long yellow fruit.
+</>
