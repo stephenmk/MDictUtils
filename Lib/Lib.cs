@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Web;
 using System.Text.RegularExpressions;
 using System.IO.Compression;
 
@@ -666,8 +665,8 @@ public class MDictWriter
                 DateTime.Today.Year,
                 DateTime.Today.Month,
                 DateTime.Today.Day,
-                HttpUtility.HtmlAttributeEncode(_description),
-                HttpUtility.HtmlAttributeEncode(_title),
+                EscapeHtml(_description),
+                EscapeHtml(_title),
                 registerByStr
             );
         }
@@ -698,8 +697,8 @@ public class MDictWriter
                 DateTime.Today.Year,
                 DateTime.Today.Month,
                 DateTime.Today.Day,
-                HttpUtility.HtmlAttributeEncode(_description),
-                HttpUtility.HtmlAttributeEncode(_title),
+                EscapeHtml(_description),
+                EscapeHtml(_title),
                 registerByStr
            );
         }
@@ -730,6 +729,18 @@ public class MDictWriter
             Array.Reverse(checksumBytes);
         }
         stream.Write(checksumBytes, 0, checksumBytes.Length);
+    }
+
+    // Same as python: escape(self._description, quote=True),
+    // System.Web.HttpUtility.HtmlAttributeEncode(s) doesn't do the trick...
+    private static string EscapeHtml(string s)
+    {
+        return s
+            .Replace("&", "&amp;")   // Must be first
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&#x27;");
     }
 
     private void WriteKeySection(Stream outfile)

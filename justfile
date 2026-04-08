@@ -2,12 +2,14 @@ cli *args:
   dotnet run --project Cli -- {{args}}
 
 run:
-  dotnet run --project Cli -- assets/out2.mdx -a assets/stub.txt
+  dotnet run --project Cli -- assets/out2.mdx -a assets/stub.txt --title assets/title.html --description assets/description.html
   dotnet run --project Cli -- assets/out2.mdd -a assets/stub.txt
+  # dotnet run --project Cli -- assets/out2.mdx -m > assets/meta2
 
 oracle:
-  mdict assets/out1.mdx -a assets/stub.txt
+  mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html --description assets/description.html
   mdict assets/out1.mdd -a assets/stub.txt
+  # mdict assets/out1.mdx -m > assets/meta1
 
 do-undo:
   dotnet run --project Cli -- assets/out1.mdd -a assets/stub.txt && \
@@ -33,6 +35,8 @@ final:
   @just oracle
   cmp assets/out1.mdx assets/out2.mdx
   cmp assets/out1.mdd assets/out2.mdd
+  # Comparing meta will fail because python prints the timer at the end
+  # cmp assets/meta1 assets/meta2
 
 # Otherwise nvim go to definition sends you to assembly and not source code
 sln:
