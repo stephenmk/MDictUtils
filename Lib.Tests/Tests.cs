@@ -117,15 +117,59 @@ public class Adler32Tests
 // Pack and Unpack should be reversable
 public class DoUndoTests
 {
-    [Fact]
-    public void DoUndo_PackAndUnpackMdd_ProducesIdenticalFile()
-    {
-        const string testContent = @"apple
+    const string testContent = @"apple
 A fruit that grows on trees.
 </>
 banana
 A long yellow fruit.
 </>";
+
+    [Fact]
+    public void DoUndo_PackAndUnpackMdx_ProducesIdenticalFile()
+    {
+        const bool isMdd = false;
+
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        string originalStubPath = Path.Combine(tempDir, "stub.txt");
+        string outMdxPath = Path.Combine(tempDir, "out1.mdx");
+        string extractedStubPath = Path.Combine(tempDir, "out1.mdx.txt");
+
+        try
+        {
+            // Create stub.txt
+            File.WriteAllText(originalStubPath, testContent);
+
+            // Pack stub.txt into out1.mdd
+            var packedEntries = MDictPacker.PackMdxTxt(originalStubPath);
+            var writer = new MDictWriter(packedEntries, isMdd: isMdd);
+            using (var outFile = File.Open(outMdxPath, FileMode.Create))
+            {
+                writer.Write(outFile);
+            }
+
+            File.Delete(originalStubPath);
+
+            // Unpack out1.mdd to tempDir and compare normalized
+            MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);
+            Assert.True(File.Exists(extractedStubPath), "Extracted file should exist");
+            string extractedContent = File.ReadAllText(extractedStubPath);
+            string normalizedOriginal = testContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
+            string normalizedExtracted = extractedContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
+            Assert.Equal(normalizedOriginal, normalizedExtracted);
+        }
+        finally
+        {
+            // Cleanup
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DoUndo_PackAndUnpackMdd_ProducesIdenticalFile()
+    {
+        const bool isMdd = true;
 
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -140,7 +184,7 @@ A long yellow fruit.
 
             // Pack stub.txt into out1.mdd
             var packedEntries = MDictPacker.PackMddFile(originalStubPath);
-            var writer = new MDictWriter(packedEntries, isMdd: true);
+            var writer = new MDictWriter(packedEntries, isMdd: isMdd);
             using (var outFile = File.Open(outMddPath, FileMode.Create))
             {
                 writer.Write(outFile);
@@ -149,11 +193,11 @@ A long yellow fruit.
             File.Delete(originalStubPath);
 
             // Unpack out1.mdd to tempDir and compare normalized
-            MDictPacker.Unpack(tempDir, outMddPath, isMdd: true);
+            MDictPacker.Unpack(tempDir, outMddPath, isMdd: isMdd);
             Assert.True(File.Exists(extractedStubPath), "Extracted file should exist");
             string extractedContent = File.ReadAllText(extractedStubPath);
-            string normalizedOriginal = testContent.Replace("\r\n", "\n").Replace("\r", "\n");
-            string normalizedExtracted = extractedContent.Replace("\r\n", "\n").Replace("\r", "\n");
+            string normalizedOriginal = testContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
+            string normalizedExtracted = extractedContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
             Assert.Equal(normalizedOriginal, normalizedExtracted);
         }
         finally

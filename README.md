@@ -19,9 +19,11 @@ Note that because the encoding/decoding depends on the current date, there will 
   - [ ] Do folders work? Probably not
 - [x] Support basic reading operations for debug purposes
   - [x] Support file.mdd -x (passes do-undo test)
-  - [x] Clean 1
+  - [x] Clean
   - [x] Write do-undo test into the testsuite
-- [ ] Support file.mdx -x
+- [x] Support file.mdx -x
+  - [x] Write do-undo test into the testsuite
+  - [x] Clean
 - [ ] Support passing html as title/description
 - [ ] Remove all non-version-2.0 branches because noise
 - [ ] Support basic reading operations for debug purposes

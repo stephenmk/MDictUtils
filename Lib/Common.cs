@@ -7,37 +7,27 @@ namespace Lib;
 // Some helper methods
 internal static class Common
 {
-    public static byte[] ToBigEndian(ulong value)
+    public static byte[] ToBigEndian(byte[] value)
     {
-        var bytes = BitConverter.GetBytes(value);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(bytes);
-        return bytes;
+        if (BitConverter.IsLittleEndian) Array.Reverse(value);
+        return value;
     }
 
-    public static byte[] ToBigEndian(uint value)
+    public static byte[] ToBigEndian(ulong value) => ToBigEndian(BitConverter.GetBytes(value));
+    public static byte[] ToBigEndian(uint value) => ToBigEndian(BitConverter.GetBytes(value));
+    public static byte[] ToBigEndian(ushort value) => ToBigEndian(BitConverter.GetBytes(value));
+
+    public static int ReadInt32BigEndian(byte[] bytes) => BitConverter.ToInt32(ToBigEndian(bytes), 0);
+    public static int ReadInt32BigEndian(BinaryReader br) => ReadInt32BigEndian(br.ReadBytes(4));
+
+    public static int ReadUInt16BigEndian(byte[] buffer, int offset)
     {
-        var bytes = BitConverter.GetBytes(value);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(bytes);
-        return bytes;
+        byte[] slice = new byte[2];
+        Array.Copy(buffer, offset, slice, 0, 2);
+        return BitConverter.ToUInt16(ToBigEndian(slice), 0);
     }
 
-    public static byte[] ToBigEndian(ushort value)
-    {
-        var bytes = BitConverter.GetBytes(value);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(bytes);
-        return bytes;
-    }
-
-    public static int ReadInt32BigEndian(BinaryReader br)
-    {
-        byte[] bytes = br.ReadBytes(4);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(bytes);
-        return BitConverter.ToInt32(bytes, 0);
-    }
+    public static uint ReadUInt32BigEndian(byte[] bytes) => BitConverter.ToUInt32(ToBigEndian(bytes), 0);
 
     public static void PrintPythonStyle(byte[] data)
     {

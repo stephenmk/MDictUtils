@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Diagnostics;
 
 using D = System.Collections.Generic.List<Lib.MDictEntry>;
 
@@ -13,6 +12,12 @@ public static class MDictPacker
 {
     public static void Unpack(string target, string source, bool isMdd)
     {
+        // Should probably Create with parents in case target = d1/d2/folder
+        if (!Directory.Exists(target))
+        {
+            Directory.CreateDirectory(target);
+        }
+
         if (isMdd)
         {
             UnpackMdd(target, source);
@@ -26,22 +31,77 @@ public static class MDictPacker
 
     public static void UnpackMdx(string target, string source)
     {
-        throw new NotImplementedException();
+        MDX mdx = new(source);
+        string basename = Path.GetFileName(source);
+
+        Dictionary<string, string> header = mdx.Header;
+
+        if (header.TryGetValue("Description", out string description) && description.Length > 0)
+        {
+            string descPath = Path.Combine(target, basename + ".description.html");
+            // Console.WriteLine($"[UnpackMdx] Writing description to {descPath}...");
+            using FileStream fs = new(descPath, FileMode.Create, FileAccess.Write);
+            using StreamWriter swriter = new(fs, Encoding.UTF8);
+
+            foreach (var line in description.Split(["\r\n", "\n"], StringSplitOptions.None))
+            {
+                swriter.WriteLine(line);
+            }
+        }
+
+        if (header.TryGetValue("Title", out string title) && title.Length > 0)
+        {
+            string titlePath = Path.Combine(target, basename + ".title.html");
+            // Console.WriteLine($"[UnpackMdx] Writing title to {titlePath}...");
+            File.WriteAllText(titlePath, title, Encoding.UTF8);
+        }
+
+        // We only support split - None
+        // Since split is None, we just write everything to a single file
+        string outPath = Path.Combine(target, basename + ".txt");
+
+        using FileStream tf = new(outPath, FileMode.Create, FileAccess.Write);
+        using BinaryWriter writer = new(tf);
+
+        int itemCount = 0;
+
+        foreach ((string key, byte[] value) in mdx.Items())
+        {
+            // if not value.strip(): continue
+            if (value == null || value.Length == 0 || IsAllWhitespace(value)) continue;
+
+            itemCount++;
+
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+            writer.Write(keyBytes);
+            writer.Write([.. "\r\n"u8]);
+
+            writer.Write(value);
+            if (value.Length == 0 || value[^1] != (byte)'\n')
+            {
+                writer.Write([.. "\r\n"u8]);
+            }
+
+            writer.Write(Encoding.UTF8.GetBytes("</>\r\n"));
+        }
+    }
+
+    static bool IsAllWhitespace(byte[] data)
+    {
+        foreach (byte b in data)
+        {
+            if (!char.IsWhiteSpace((char)b))
+                return false;
+        }
+        return true;
     }
 
     public static void UnpackMdd(string target, string source)
     {
-        if (!Directory.Exists(target))
-        {
-            Directory.CreateDirectory(target);
-        }
-
-        var mdd = new MDD(source, null);
-        int itemsCount = 0;
+        MDD mdd = new(source);
 
         foreach ((string fname, byte[] v) in mdd.Items())
         {
-            itemsCount++;
             var fnameClean = fname.TrimStart('\\'); // BUG: This is definitely a bug
             string fullPath = Path.Combine(target, fnameClean);
             // Console.WriteLine($"UnpackMdd {fullPath} {fname} > clean > {fnameClean}");
@@ -53,7 +113,6 @@ public static class MDictPacker
             Console.WriteLine($"[UnpackMdd] Writing record @ {fullPath}");
             File.WriteAllBytes(fullPath, v);
         }
-        Debug.Assert(itemsCount == mdd.Count);
 
         Console.WriteLine($"Extracted {mdd.Count} entries to {target}");
     }

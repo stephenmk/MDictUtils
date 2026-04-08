@@ -15,7 +15,7 @@ static class Program
 
         Argument<string> mdictPath = new("mdx/mdd file")
         {
-            Description = "Dictionary MDX/MDD file"
+            Description = "Dictionary mdx/mdd file"
         };
 
         // TODO: This is supposed to have >1 arity
