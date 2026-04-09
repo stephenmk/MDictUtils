@@ -12,11 +12,11 @@ public static class MDictPacker
 {
     // python does not include the BOM in the title/description
     // so we do the same to allow for oracle testing (but it should not matter really)
-    private static readonly UTF8Encoding UTF8NoBOM = new UTF8Encoding(false);
+    private static readonly UTF8Encoding UTF8NoBOM = new(false);
 
     public static void Unpack(string target, string source, bool isMdd)
     {
-        // Should probably Create with parents in case target = d1/d2/folder
+        // This creates intermediate folders, in case target = d1/d2/folder
         if (!Directory.Exists(target))
         {
             Directory.CreateDirectory(target);

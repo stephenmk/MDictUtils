@@ -29,6 +29,7 @@ pip install mdict-utils
   - [x] Clean
 - [x] Support -m command
 - [x] Support passing html as title/description
+- [x] Add -d flag
 - [ ] Add LICENCE
 - [ ] Remove all non-version-2.0 branches because noise
 - [ ] Release binaries (?)

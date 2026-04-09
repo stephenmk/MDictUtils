@@ -15,6 +15,7 @@ static class Program
         public string MdictPath { get; set; }
         public string AddPath { get; set; }
         public string TitlePath { get; set; }
+        public string ExtractDirPath { get; set; }
         public string DescriptionPath { get; set; }
         public bool ExtractFlag { get; set; }
         public bool MetaFlag { get; set; }
@@ -27,6 +28,7 @@ static class Program
     AddPath = {AddPath},
     TitlePath = {TitlePath},
     DescriptionPath = {DescriptionPath},
+    ExtractDirPath = {ExtractDirPath},
     ExtractFlag = {ExtractFlag},
     MetaFlag = {MetaFlag},
     IsMdd = {IsMdd}
@@ -67,6 +69,12 @@ static class Program
         {
             Description = "Extract mdx/mdd file",
         };
+        // TODO: requires -x to work, python design is ...
+        Option<string> extractDirPath = new("--dir", "-d")
+        {
+            Description = "Extract mdx/mdd to directory",
+        };
+
         Option<bool> metaFlag = new("--meta", "-m")
         {
             Description = "Show mdx/mdd meta information",
@@ -77,6 +85,7 @@ static class Program
         rootCommand.Options.Add(titlePath);
         rootCommand.Options.Add(descriptionPath);
         rootCommand.Options.Add(extractFlag);
+        rootCommand.Options.Add(extractDirPath);
         rootCommand.Options.Add(metaFlag);
 
         rootCommand.SetAction(parseResult =>
@@ -109,6 +118,7 @@ static class Program
             var parsedDescriptionPath = parseResult.GetValue(descriptionPath);
             var parsedExtractFlag = parseResult.GetValue(extractFlag);
             var parsedMetaFlag = parseResult.GetValue(metaFlag);
+            var parsedExtractDirPath = parseResult.GetValue(extractDirPath); // does not need to exist
 
             if (CheckPath(parsedAddPath) != 0) return 1;
             if (CheckPath(parsedTitlePath) != 0) return 1;
@@ -130,6 +140,7 @@ static class Program
                 MdictPath = parsedMdictPath,
                 AddPath = parsedAddPath,
                 TitlePath = parsedTitlePath,
+                ExtractDirPath = parsedExtractDirPath,
                 DescriptionPath = parsedDescriptionPath,
                 ExtractFlag = parsedExtractFlag,
                 MetaFlag = parsedMetaFlag,
@@ -183,8 +194,7 @@ static class Program
         }
         else if (args.ExtractFlag)
         {
-            // TODO: maybe be able to pass it (the original uses --dir)
-            var target = Directory.GetCurrentDirectory();
+            var target = args.ExtractDirPath ?? Directory.GetCurrentDirectory();
             target = Path.GetFullPath(target);
             MDictPacker.Unpack(target, args.MdictPath, args.IsMdd);
         }
