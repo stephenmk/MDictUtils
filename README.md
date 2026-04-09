@@ -6,10 +6,13 @@ Oracle testing requires mdict-utils installed. For instance, create a venv at th
 pip install mdict-utils
 ```
 
-Note that because the encoding/decoding depends on the current date, there will be some diff with the commited fixtures if you run this in the future (!). The only thing that matters is that `mdict` and this repo produce the same artifacts _on a given date_.
+### Notes
+- Because the encoding/decoding depends on the current date, there will be some diff with the commited fixtures if you run this in the future (!). The only thing that matters is that `mdict` and this repo produce the same artifacts _on a given date_.
+- Because of differences between python zlib and the c# equivalent, the bytes of the compressed artifact may not exactly match (usually happens after a certain size). This should not matter, the sizes will be approximately equal, and they will decompress to the same data (but oracle test will fail if you compare the compressed artifacts!).
 
 ### Links
 - [file format doc](https://mdict4j.readthedocs.io/zh-cn/latest/reference/fileformat.html)
+- pyglossary has some files about [mdict](https://github.com/ilius/pyglossary/blob/master/pyglossary/plugin_lib/readmdict.py)
 - https://github.com/cia1099/mdict
 - https://github.com/terasum/js-mdict
 - The skeleton of this repo was from [unit testing tutorial](https://docs.microsoft.com/dotnet/core/testing/unit-testing-with-dotnet-test)

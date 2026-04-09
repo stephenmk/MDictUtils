@@ -10,6 +10,10 @@ namespace Lib;
 // Packer, does both writing (packing) and reading (unpacking)
 public static class MDictPacker
 {
+    // python does not include the BOM in the title/description
+    // so we do the same to allow for oracle testing (but it should not matter really)
+    private static readonly UTF8Encoding UTF8NoBOM = new UTF8Encoding(false);
+
     public static void Unpack(string target, string source, bool isMdd)
     {
         // Should probably Create with parents in case target = d1/d2/folder
@@ -41,7 +45,7 @@ public static class MDictPacker
             string descPath = Path.Combine(target, basename + ".description.html");
             // Console.WriteLine($"[UnpackMdx] Writing description to {descPath}...");
             using FileStream fs = new(descPath, FileMode.Create, FileAccess.Write);
-            using StreamWriter swriter = new(fs, Encoding.UTF8);
+            using StreamWriter swriter = new(fs, UTF8NoBOM);
 
             foreach (var line in description.Split(["\r\n", "\n"], StringSplitOptions.None))
             {
@@ -53,7 +57,7 @@ public static class MDictPacker
         {
             string titlePath = Path.Combine(target, basename + ".title.html");
             // Console.WriteLine($"[UnpackMdx] Writing title to {titlePath}...");
-            File.WriteAllText(titlePath, title, Encoding.UTF8);
+            File.WriteAllText(titlePath, title, UTF8NoBOM);
         }
 
         // We only support split - None
@@ -102,7 +106,7 @@ public static class MDictPacker
 
         foreach ((string fname, byte[] v) in mdd.Items())
         {
-            var fnameClean = fname.TrimStart('\\'); // BUG: This is definitely a bug
+            var fnameClean = fname.TrimStart('\\'); // bug? happens in the original too
             string fullPath = Path.Combine(target, fnameClean);
             // Console.WriteLine($"UnpackMdd {fullPath} {fname} > clean > {fnameClean}");
             string dir = Path.GetDirectoryName(fullPath);

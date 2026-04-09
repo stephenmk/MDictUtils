@@ -82,19 +82,22 @@ public class MDictSorterTests
     {
         List<(string Key, int ExpectedIndex)> items =
         [
+            ("ångström", 3),
             ("@cc-100", 2),
             ("banana", 1),
             ("apple", 0),
         ];
 
+        var expected = new List<(string Key, int ExpectedIndex)>(items);
+        expected.Sort((a, b) => a.ExpectedIndex.CompareTo(b.ExpectedIndex));
+
         items.Sort((a, b) => MDictWriter.CompareMDictKeys(a.Key, b.Key, isMdd: false));
 
-        Assert.Equal("apple", items[0].Key);
-        Assert.Equal(0, items[0].ExpectedIndex);
-        Assert.Equal("banana", items[1].Key);
-        Assert.Equal(1, items[1].ExpectedIndex);
-        Assert.Equal("@cc-100", items[2].Key);
-        Assert.Equal(2, items[2].ExpectedIndex);
+        for (int i = 0; i < items.Count; i++)
+        {
+            Assert.Equal(expected[i].Key, items[i].Key);
+            Assert.Equal(expected[i].ExpectedIndex, items[i].ExpectedIndex);
+        }
     }
 }
 

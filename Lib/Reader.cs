@@ -90,7 +90,7 @@ public class MDict
             while (keyIndex < _keyList.Count)
             {
                 var (recordStart, keyText) = _keyList[keyIndex];
-                Console.WriteLine($"[ReadRecords] recordStart {recordStart}, keyText {keyText}");
+                // Console.WriteLine($"[ReadRecords] recordStart {recordStart}, keyText {keyText}");
 
                 // If the current record starts beyond this block, break
                 if (recordStart - offset >= recordBlock.Length)

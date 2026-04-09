@@ -129,6 +129,13 @@ internal abstract class MdxBlock
         byte[] header = [.. lend.Concat(adlerBytes)];
 
         using var ms = new MemoryStream();
+
+        // return header + zlib.compress(data)
+        // python default is -1 == 6 , see: https://docs.python.org/3/library/zlib.html#zlib.Z_DEFAULT_COMPRESSION
+        // c# are cooked, custom-made levels, and may not correspond to anything
+        // https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.compressionlevel?view=net-10.0
+        //
+        // There is no reliable way to get the same exact bytes, so live with that
         using (var z = new ZLibStream(ms, CompressionLevel.Optimal, leaveOpen: true))
         {
             z.Write(data, 0, data.Length);
@@ -221,7 +228,6 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
     // We overwrite "return entry.RecordNull"
     protected override byte[] GetBlockEntry(OffsetTableEntry entry, string version)
     {
-        // Read record from the file and store it
         byte[] record = ReadRecord(entry.FilePath, entry.RecordPos, (int)entry.RecordSize, entry.IsMdd);
         entry.RecordNull = record;
         return record;
@@ -447,7 +453,9 @@ public class MDictWriter
         }
 
         // key1 = locale.strxfrm(key1) ??
-        int cmp = string.Compare(k1, k2);
+        // this was locale dependent in py, but then we don't pass our tests,
+        // and it shouldn't matter anyway as long as the internal mapping works
+        int cmp = string.CompareOrdinal(k1, k2);
         if (cmp != 0) return cmp;
 
         // reverse length (longer first) - compare on current k1/k2
@@ -687,13 +695,13 @@ public class MDictWriter
                 registerByStr
            );
         }
-        Console.WriteLine($"{headerString}");
-        Console.WriteLine($"header str: {headerString.Length}");
+        // Console.WriteLine($"{headerString}");
+        // Console.WriteLine($"header str: {headerString.Length}");
 
         // Encode to UTF-16 LE (must be identical to python .encode("utf_16_le")
         byte[] headerBytes = Encoding.Unicode.GetBytes(headerString);
-        Console.WriteLine($"header bytes: {headerBytes.Length}");
-        Console.WriteLine("        " + string.Join(" ", headerBytes.Select(b => b.ToString("X2"))));
+        // Console.WriteLine($"header bytes: {headerBytes.Length}");
+        // Console.WriteLine("        " + string.Join(" ", headerBytes.Select(b => b.ToString("X2"))));
 
         // Write header length (big-endian)
         byte[] lengthBytes = BitConverter.GetBytes((uint)headerBytes.Length);

@@ -30,11 +30,14 @@ final-old:
   mdict assets/out1.mdx -a assets/stub.txt
   cmp assets/out1.mdx assets/out2.mdx
 
+cmp *args:
+  cmp {{args}} assets/out1.mdx assets/out2.mdx
+  cmp {{args}} assets/out1.mdd assets/out2.mdd
+
 final:
   @just run
   @just oracle
-  cmp assets/out1.mdx assets/out2.mdx
-  cmp assets/out1.mdd assets/out2.mdd
+  just cmp
   # Comparing meta will fail because python prints the timer at the end
   # cmp assets/meta1 assets/meta2
 
