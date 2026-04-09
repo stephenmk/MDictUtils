@@ -13,7 +13,7 @@ static class Program
     class Args
     {
         public string MdictPath { get; set; }
-        public string AddPath { get; set; }
+        public string[] AddPaths { get; set; }
         public string TitlePath { get; set; }
         public string ExtractDirPath { get; set; }
         public string DescriptionPath { get; set; }
@@ -25,7 +25,7 @@ static class Program
         {
             return $@"Args {{
     MdictPath = {MdictPath},
-    AddPath = {AddPath},
+    AddPaths = {AddPaths},
     TitlePath = {TitlePath},
     DescriptionPath = {DescriptionPath},
     ExtractDirPath = {ExtractDirPath},
@@ -48,9 +48,11 @@ static class Program
 
         // TODO: This is supposed to have >1 arity
         // TODO: should be a subcommand
-        Option<string> addPath = new("--add", "-a")
+        // It's not nullable, defaults to empty list
+        Option<string[]> addPaths = new("--add", "-a")
         {
             Description = "Resource file to add",
+            Arity = ArgumentArity.OneOrMore,
         };
         // TODO: these should should require --add or they do nothing
         // Is title and description assumed to be html? Seems so looking at the source code unpacking...
@@ -81,7 +83,7 @@ static class Program
         };
 
         rootCommand.Arguments.Add(mdictPath);
-        rootCommand.Options.Add(addPath);
+        rootCommand.Options.Add(addPaths);
         rootCommand.Options.Add(titlePath);
         rootCommand.Options.Add(descriptionPath);
         rootCommand.Options.Add(extractFlag);
@@ -113,14 +115,17 @@ static class Program
 
             // TODO: if we are mdx, we should only accept txt as in --add
 
-            var parsedAddPath = parseResult.GetValue(addPath);
+            var parsedAddPaths = parseResult.GetValue(addPaths);
             var parsedTitlePath = parseResult.GetValue(titlePath);
             var parsedDescriptionPath = parseResult.GetValue(descriptionPath);
             var parsedExtractFlag = parseResult.GetValue(extractFlag);
             var parsedMetaFlag = parseResult.GetValue(metaFlag);
             var parsedExtractDirPath = parseResult.GetValue(extractDirPath); // does not need to exist
 
-            if (CheckPath(parsedAddPath) != 0) return 1;
+            foreach (string parsedAddPath in parsedAddPaths)
+            {
+                if (CheckPath(parsedAddPath) != 0) return 1;
+            }
             if (CheckPath(parsedTitlePath) != 0) return 1;
             if (CheckPath(parsedDescriptionPath) != 0) return 1;
 
@@ -138,7 +143,7 @@ static class Program
             Args arguments = new()
             {
                 MdictPath = parsedMdictPath,
-                AddPath = parsedAddPath,
+                AddPaths = parsedAddPaths,
                 TitlePath = parsedTitlePath,
                 ExtractDirPath = parsedExtractDirPath,
                 DescriptionPath = parsedDescriptionPath,
@@ -169,11 +174,16 @@ static class Program
     {
         Console.Error.WriteLine(args);
 
-        if (args.AddPath != null)
+        if (args.AddPaths.Length > 0)
         {
-            List<MDictEntry> packed = args.IsMdd
-                ? MDictPacker.PackMddFile(args.AddPath)
-                : MDictPacker.PackMdxTxt(args.AddPath);
+            List<MDictEntry> packed = [];
+            foreach (string AddPath in args.AddPaths)
+            {
+                List<MDictEntry> packedAtPath = args.IsMdd
+                      ? MDictPacker.PackMddFile(AddPath)
+                      : MDictPacker.PackMdxTxt(AddPath);
+                packed.AddRange(packedAtPath);
+            }
 
             string title = "";
             if (!string.IsNullOrEmpty(args.TitlePath))

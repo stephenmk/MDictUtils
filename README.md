@@ -7,6 +7,7 @@ pip install mdict-utils
 ```
 
 ### Notes
+- The main purpose of this port is to support the mdict version of [Jitendex](https://github.com/Jitendex/Jitendex) and as such, it only contains a subset of the original mdict-utils fonctionality. Namely, it does no encrypting and assumes the version to be 2.0.
 - Because the encoding/decoding depends on the current date, there will be some diff with the commited fixtures if you run this in the future (!). The only thing that matters is that `mdict` and this repo produce the same artifacts _on a given date_.
 - Because of differences between python zlib and the c# equivalent, the bytes of the compressed artifact may not exactly match (usually happens after a certain size). This should not matter, the sizes will be approximately equal, and they will decompress to the same data (but oracle test will fail if you compare the compressed artifacts!).
 
@@ -19,7 +20,6 @@ pip install mdict-utils
 
 ### TODO
 - [x] Support encoding mdd
-  - [ ] Do folders work? Probably not
 - [x] Support basic reading operations for debug purposes
   - [x] Support file.mdd -x (passes do-undo test)
   - [x] Clean
@@ -30,7 +30,10 @@ pip install mdict-utils
 - [x] Support -m command
 - [x] Support passing html as title/description
 - [x] Add -d flag
-- [ ] Do -a work with multiple items -a i1 -a i2?
+- [x] Support -a work with multiple items -a i1 -a i2?
 - [ ] Add LICENCE
 - [ ] Remove all non-version-2.0 branches because noise
 - [ ] Release binaries (?)
+- [ ] Explore how to use as a library (writing a glossary from memory instead of disk)
+
+- [ ] How good is pyglossary for wty/Jitendex? Test in goldendict

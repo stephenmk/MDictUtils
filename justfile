@@ -2,12 +2,12 @@ cli *args:
   dotnet run --project Cli -- {{args}}
 
 run:
-  dotnet run --project Cli -- assets/out2.mdx -a assets/stub.txt --title assets/title.html --description assets/description.html
+  dotnet run --project Cli -- assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html
   dotnet run --project Cli -- assets/out2.mdd -a assets/stub.txt
   # dotnet run --project Cli -- assets/out2.mdx -m > assets/meta2
 
 oracle:
-  mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html --description assets/description.html
+  mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html -a assets/extra.txt --description assets/description.html
   mdict assets/out1.mdd -a assets/stub.txt
   # mdict assets/out1.mdx -m > assets/meta1
 
