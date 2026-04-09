@@ -79,7 +79,7 @@ internal abstract class MdxBlock
         if (compressionType != 2 || version != "2.0")
             throw new NotSupportedException();
 
-        Console.WriteLine("[Debug] Calling MdxBlock...");
+        // Console.WriteLine("[Debug] Calling MdxBlock...");
 
         var decompData = new List<byte>();
         foreach (var entry in offsetTable)
@@ -100,7 +100,6 @@ internal abstract class MdxBlock
         // Console.WriteLine($"[Debug] Compressed array length (_compSize): {_compSize}");
 
         _version = version;
-        Console.WriteLine("[Debug] MdxBlock initialization complete.\n");
     }
 
     public byte[] GetBlock()
@@ -256,7 +255,7 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
                 record[bytesRead] = 0; // null-terminate
             }
         }
-        Console.WriteLine($"[ReadRecord] Record length: {record.Length}");
+        // Console.WriteLine($"[ReadRecord] Record length: {record.Length}");
 
         return record;
     }
@@ -288,18 +287,10 @@ internal class MdxKeyBlock : MdxBlock
         : base(offsetTable, compressionType, version)
     {
         _numEntries = offsetTable.Count;
+        Debug.Assert(version == "2.0");
 
-        if (version == "2.0")
-        {
-            _firstKey = offsetTable[0].KeyNull;
-            _lastKey = offsetTable[^1].KeyNull;
-        }
-        else
-        {
-            _firstKey = offsetTable[0].Key;
-            _lastKey = offsetTable[^1].Key;
-        }
-
+        _firstKey = offsetTable[0].KeyNull;
+        _lastKey = offsetTable[^1].KeyNull;
         _firstKeyLen = offsetTable[0].KeyLen;
         _lastKeyLen = offsetTable[^1].KeyLen;
     }
@@ -313,31 +304,24 @@ internal class MdxKeyBlock : MdxBlock
         return [.. result];
     }
 
+    // Approximate for version 2.0
     public override int LenBlockEntry(OffsetTableEntry entry)
     {
-        return 8 + entry.KeyNull.Length; // Approximate for version 2.0
+        return 8 + entry.KeyNull.Length;
     }
 
     public override byte[] GetIndexEntry()
     {
-        // Console.WriteLine("Called GetIndexEntry on MDXKEYBLOCK");
-        // Console.WriteLine($"    compSize {_compSize}; decompsize {_decompSize}");
         List<byte> result = [];
+        Debug.Assert(_version == "2.0");
 
-        if (_version == "2.0")
-        {
-            result.AddRange(Common.ToBigEndian((ulong)_numEntries));
-            result.AddRange(Common.ToBigEndian((ushort)_firstKeyLen));
-            result.AddRange(_firstKey);
-            result.AddRange(Common.ToBigEndian((ushort)_lastKeyLen));
-            result.AddRange(_lastKey);
-            result.AddRange(Common.ToBigEndian((ulong)_compSize));
-            result.AddRange(Common.ToBigEndian((ulong)_decompSize));
-        }
-        else
-        {
-            throw new NotImplementedException();
-        }
+        result.AddRange(Common.ToBigEndian((ulong)_numEntries));
+        result.AddRange(Common.ToBigEndian((ushort)_firstKeyLen));
+        result.AddRange(_firstKey);
+        result.AddRange(Common.ToBigEndian((ushort)_lastKeyLen));
+        result.AddRange(_lastKey);
+        result.AddRange(Common.ToBigEndian((ulong)_compSize));
+        result.AddRange(Common.ToBigEndian((ulong)_decompSize));
 
         return [.. result];
     }
@@ -405,9 +389,9 @@ public class MDictWriter
             throw new ArgumentException("Unknown encoding. Supported: utf8, utf16");
         }
 
-        if (version != "2.0" && version != "1.2")
+        if (version != "2.0")
         {
-            throw new ArgumentException("Unknown version. Supported: 2.0, 1.2");
+            throw new ArgumentException("Unknown version. Supported: 2.0");
         }
 
         BuildOffsetTable(dictionary);
@@ -443,41 +427,48 @@ public class MDictWriter
         Console.WriteLine("[Writer] Initialization complete.\n");
     }
 
+    // We could merge this two at some point
+    // Also internal so we can test it
+    // [!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ ]+
+    internal static readonly Regex _regexStrip = new(@"[!\""#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~]+");
+    internal static readonly char[] _punctuationChars = [.. "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"];
+
+    // To be static, we pass isMdd (instead of reading _isMdd)
+    // Also internal so we can test it
+    internal static int CompareMDictKeys(string key1, string key2, bool isMdd)
+    {
+        string k1 = key1.ToLower();
+        string k2 = key2.ToLower();
+
+        if (!isMdd)
+        {
+            k1 = _regexStrip.Replace(k1, "");
+            k2 = _regexStrip.Replace(k2, "");
+        }
+
+        // key1 = locale.strxfrm(key1) ??
+        int cmp = string.Compare(k1, k2);
+        if (cmp != 0) return cmp;
+
+        // reverse length (longer first) - compare on current k1/k2
+        if (k1.Length != k2.Length)
+            return k2.Length.CompareTo(k1.Length);
+
+        // strip punctuation
+        k1 = k1.TrimEnd(_punctuationChars);
+        k2 = k2.TrimEnd(_punctuationChars);
+
+        return string.CompareOrdinal(k2, k1);
+    }
+
     private void BuildOffsetTable(D dictionary)
     {
-        // [!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ ]+
-        var regexStrip = new Regex($"[{Regex.Escape("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{{|}}~")} ]+");
-
-        var items = dictionary.ToList();
-
-        items.Sort((a, b) =>
-        {
-            string k1 = a.Key.ToLower();
-            string k2 = b.Key.ToLower();
-            if (!_isMdd)
-            {
-                k1 = regexStrip.Replace(k1, "");
-                k2 = regexStrip.Replace(k2, "");
-            }
-
-            int cmp = string.Compare(k1, k2);
-            if (cmp != 0) return cmp;
-
-            // reverse length (longer first)
-            if (k1.Length != k2.Length)
-                return k2.Length.CompareTo(k1.Length);
-
-            // strip punctuation (approximation)
-            k1 = k1.TrimEnd('.', ',', '!', '?', ':', ';');
-            k2 = k2.TrimEnd('.', ',', '!', '?', ':', ';');
-
-            return string.CompareOrdinal(k2, k1);
-        });
+        dictionary.Sort((a, b) => CompareMDictKeys(a.Key, b.Key, _isMdd));
 
         _offsetTable = [];
         long offset = 0;
 
-        foreach (var item in items)
+        foreach (var item in dictionary)
         {
             // Console.WriteLine($"dict item: {item}");
             var keyEnc = _innerEncoding.GetBytes(item.Key);
@@ -551,12 +542,6 @@ public class MDictWriter
         for (int ind = 0; ind <= _offsetTable.Count; ind++)
         {
             OffsetTableEntry t = (ind != _offsetTable.Count) ? _offsetTable[ind] : null;
-            Console.WriteLine($"[split blocks] {ind} {t}");
-            if (t != null)
-            {
-
-                Console.WriteLine($"[split blocks] lenFunc {lenFunc(t)}");
-            }
 
             bool flush = false;
 
@@ -576,10 +561,10 @@ public class MDictWriter
             if (flush)
             {
                 var blockEntries = _offsetTable.GetRange(thisBlockStart, ind - thisBlockStart);
-                foreach (var entry in blockEntries)
-                {
-                    Console.WriteLine($"[split flush] {entry}");
-                }
+                // foreach (var entry in blockEntries)
+                // {
+                //     Console.WriteLine($"[split flush] {entry}");
+                // }
                 var block = blockConstructor(blockEntries, _compressionType, _version);
                 blocks.Add(block);
                 curSize = 0;
