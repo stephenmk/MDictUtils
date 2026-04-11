@@ -277,12 +277,14 @@ public sealed record MDictWriterOptions
     string Encoding        = "utf8",
     int    CompressionType = 2,
     string Version         = "2.0",
-    bool   IsMdd           = false
+    bool   IsMdd           = false,
+    bool   Logging         = true
 );
 #pragma warning restore format
 
 public sealed class MDictWriter
 {
+    private readonly IMDictWriterLogger _logger;
     private readonly int _numEntries;
     private readonly string _title;
     private readonly string _description;
@@ -308,6 +310,10 @@ public sealed class MDictWriter
     public MDictWriter(List<MDictEntry> entries, MDictWriterOptions? opt = null)
     {
         opt ??= new();
+
+        _logger = opt.Logging
+            ? new MDictWriterLogger()
+            : new MDictWriterDummyLogger();
 
         _numEntries = entries.Count;
         _title = opt.Title;
@@ -343,36 +349,27 @@ public sealed class MDictWriter
         }
 
         BuildOffsetTable(entries);
-        Console.WriteLine("[Writer] Offset table built.");
-        Console.WriteLine($"[Writer] Total entries: {_offsetTable.Count}, record length {_totalRecordLen}");
-        Console.WriteLine("=========================");
+        _logger.LogOffsetTable(_offsetTable, _totalRecordLen);
 
-        Console.WriteLine("[Writer] Building KeyBlocks");
+        _logger.LogBeginBuildingKeyBlocks();
         _blockSize = opt.KeySize;
         BuildKeyBlocks();
-        Console.WriteLine($"[Writer] Block size set to {_blockSize}");
-        Console.WriteLine($"[Writer] Built {_keyBlocks.Count} key blocks.");
-        foreach (var item in _keyBlocks) { Console.WriteLine($"* KeyBlock: {item}"); }
+        _logger.LogKeyBlocks(_blockSize, _keyBlocks);
 
         _blockSize = opt.BlockSize;
-        Console.WriteLine($"[Writer] Block size reset to {_blockSize}");
-        Console.WriteLine("=========================");
+        _logger.LogBlockSizeReset(_blockSize);
 
-        Console.WriteLine("[Writer] Building KeybIndex");
+        _logger.LogBeginBuildingKeybIndex();
         BuildKeybIndex();
-        Console.WriteLine($"[Writer] Key index built: decompressed={_keybIndexDecompSize}, compressed={_keybIndexCompSize}");
-        Console.WriteLine("=========================");
+        _logger.LogKeybIndex(_keybIndexDecompSize, _keybIndexCompSize);
 
         BuildRecordBlocks();
-        Console.WriteLine($"[Writer] Built {_recordBlocks.Count} record blocks.");
-        Console.WriteLine($"[Writer] Built {_recordBlocks}.");
-        Console.WriteLine("=========================");
+        _logger.LogRecordBlocks(_recordBlocks);
 
         BuildRecordbIndex();
-        Console.WriteLine($"[Writer] Record index built: size={_recordbIndexSize}");
-        Console.WriteLine("=========================");
+        _logger.LogRecordIndex(_recordbIndexSize);
 
-        Console.WriteLine("[Writer] Initialization complete.\n");
+        _logger.LogInitializationComplete();
     }
 
     private void BuildOffsetTable(List<MDictEntry> entries)
@@ -517,8 +514,7 @@ public sealed class MDictWriter
         foreach (var block in _keyBlocks)
         {
             var indexEntry = block.GetIndexEntry();
-            var displayBytes = string.Join(" ", indexEntry.Select(static b => b.ToString("X2")));
-            Console.WriteLine($"entry {displayBytes}");
+            _logger.LogIndexEntry(indexEntry);
             decompData.AddRange(indexEntry);
         }
 
@@ -546,7 +542,7 @@ public sealed class MDictWriter
         WriteRecordSection(outfile);
     }
 
-    public void WriteHeader(Stream stream)
+    private void WriteHeader(Stream stream)
     {
         const string encrypted = "No";
         const string registerByStr = "";
@@ -698,31 +694,56 @@ internal partial class MDictKeyComparer
     [GeneratedRegex(@"[!\""#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~ ]+")]
     public static partial Regex RegexStrip { get; }
 
-    public static int Compare(string key1, string key2, bool isMdd)
+    public static int Compare(ReadOnlySpan<char> k1, ReadOnlySpan<char> k2, bool isMdd)
     {
-        string k1 = key1.ToLower();
-        string k2 = key2.ToLower();
-
         if (!isMdd)
         {
-            k1 = RegexStrip.Replace(k1, "");
-            k2 = RegexStrip.Replace(k2, "");
+            if (RegexStrip.IsMatch(k1))
+                k1 = StripPunctuation(k1);
+
+            if (RegexStrip.IsMatch(k2))
+                k2 = StripPunctuation(k2);
         }
 
         // key1 = locale.strxfrm(key1) ??
         // this was locale dependent in py, but then we don't pass our tests,
         // and it shouldn't matter anyway as long as the internal mapping works
-        int cmp = string.CompareOrdinal(k1, k2);
-        if (cmp != 0) return cmp;
+        int cmp = k1.CompareTo(k2, StringComparison.OrdinalIgnoreCase);
+
+        if (cmp != 0)
+            return cmp;
 
         // reverse length (longer first) - compare on current k1/k2
         if (k1.Length != k2.Length)
             return k2.Length.CompareTo(k1.Length);
 
-        // strip punctuation
-        k1 = k1.TrimEnd(PunctuationChars);
-        k2 = k2.TrimEnd(PunctuationChars);
+        // trim punctuation (already stripped if this is not MDD)
+        if (isMdd)
+        {
+            k1 = k1.TrimEnd(PunctuationChars);
+            k2 = k2.TrimEnd(PunctuationChars);
+        }
 
-        return string.CompareOrdinal(k2, k1);
+        return k2.CompareTo(k1, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ReadOnlySpan<char> StripPunctuation(ReadOnlySpan<char> text)
+    {
+        Span<char> buffer = new char[text.Length];
+
+        int lastIndex = 0;
+        int charsWritten = 0;
+
+        foreach (var match in RegexStrip.EnumerateMatches(text))
+        {
+            text[lastIndex..match.Index].CopyTo(buffer[charsWritten..]);
+            charsWritten += match.Index - lastIndex;
+            lastIndex = match.Index + match.Length;
+        }
+
+        text[lastIndex..text.Length].CopyTo(buffer[charsWritten..]);
+        charsWritten += text.Length - lastIndex;
+
+        return buffer[..charsWritten];
     }
 }
