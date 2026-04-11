@@ -154,6 +154,22 @@ public class Adler32Tests
     }
 }
 
+public class HeaderTests
+{
+    [Fact]
+    public void GetHeaderString_ShouldNotReplaceLineEndingsInTitle()
+    {
+        const string title = "Title\r\n\n[2026-04-04]";
+        var opts = new MDictWriterOptions(Title: title);
+        var writer = new MDictWriter([], opts);
+        var header = writer.GetHeaderString();
+        Assert.Contains($"Title=\"{title}\"", header);
+        // Should not have newlines between elements
+        Assert.Contains("<Dictionary GeneratedByEngineVersion=\"2.0\" RequiredEngineVersion=\"2.0\"", header);
+        Assert.EndsWith("\r\n\0", header);
+    }
+}
+
 // Pack and Unpack should be reversable
 public class DoUndoTests
 {

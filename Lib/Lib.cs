@@ -544,53 +544,7 @@ public sealed class MDictWriter
 
     private void WriteHeader(Stream stream)
     {
-        const string encrypted = "No";
-        const string registerByStr = "";
-        var now = DateTime.Today;
-
-        var header = _isMdd
-            ? // MDD header
-            $"""
-            <Library_Data
-            GeneratedByEngineVersion="{_version}"
-            RequiredEngineVersion="{_version}"
-            Encrypted="{encrypted}"
-            Encoding=""
-            Format=""
-            CreationDate="{now.Year}-{now.Month}-{now.Day}"
-            KeyCaseSensitive="No"
-            Stripkey="No"
-            Description="{EscapeHtml(_description)}"
-            Title="{EscapeHtml(_title)}"
-            RegisterBy="{registerByStr}"
-            />
-            """
-            : // MDX header
-            $"""
-            <Dictionary
-            GeneratedByEngineVersion="{_version}"
-            RequiredEngineVersion="{_version}"
-            Encrypted="{encrypted}"
-            Encoding="UTF-8"
-            Format="Html"
-            Stripkey="Yes"
-            CreationDate="{now.Year}-{now.Month}-{now.Day}"
-            Compact="Yes"
-            Compat="Yes"
-            KeyCaseSensitive="No"
-            Description="{EscapeHtml(_description)}"
-            Title="{EscapeHtml(_title)}"
-            DataSourceFormat="106"
-            StyleSheet=""
-            Left2Right="Yes"
-            RegisterBy="{registerByStr}"
-            />
-            """;
-
-        header = header.ReplaceLineEndings(" ") + "\r\n\0";
-
-        // Console.WriteLine($"{headerString}");
-        // Console.WriteLine($"header str: {headerString.Length}");
+        var header = GetHeaderString();
 
         // Encode to UTF-16 LE (must be identical to python .encode("utf_16_le")
         ReadOnlySpan<byte> headerBytes = Encoding.Unicode.GetBytes(header);
@@ -609,6 +563,69 @@ public sealed class MDictWriter
         var checksumBytes = Common.ToLittleEndian(checksum);
 
         stream.Write(checksumBytes);
+    }
+
+    internal string GetHeaderString()
+    {
+        const string encrypted = "No";
+        const string registerByStr = "";
+        var now = DateTime.Today;
+
+        return _isMdd
+            ? // MDD header
+            string.Format(
+                "<Library_Data " +
+                "GeneratedByEngineVersion=\"{0}\" " +
+                "RequiredEngineVersion=\"{0}\" " +
+                "Encrypted=\"{1}\" " +
+                "Encoding=\"\" " +
+                "Format=\"\" " +
+                "CreationDate=\"{2}-{3}-{4}\" " +
+                "KeyCaseSensitive=\"No\" " +
+                "Stripkey=\"No\" " +
+                "Description=\"{5}\" " +
+                "Title=\"{6}\" " +
+                "RegisterBy=\"{7}\" " +
+                "/>\r\n\0",
+                _version,
+                encrypted,
+                now.Year,
+                now.Month,
+                now.Day,
+                EscapeHtml(_description),
+                EscapeHtml(_title),
+                registerByStr
+            )
+            : // MDX header
+            string.Format(
+                "<Dictionary " +
+                "GeneratedByEngineVersion=\"{0}\" " +
+                "RequiredEngineVersion=\"{0}\" " +
+                "Encrypted=\"{1}\" " +
+                "Encoding=\"{2}\" " +
+                "Format=\"Html\" " +
+                "Stripkey=\"Yes\" " +
+                "CreationDate=\"{3}-{4}-{5}\" " +
+                "Compact=\"Yes\" " +
+                "Compat=\"Yes\" " +
+                "KeyCaseSensitive=\"No\" " +
+                "Description=\"{6}\" " +
+                "Title=\"{7}\" " +
+                "DataSourceFormat=\"106\" " +
+                "StyleSheet=\"\" " +
+                "Left2Right=\"Yes\" " +
+                "RegisterBy=\"{8}\" " +
+                "/>\r\n\0",
+                _version,
+                encrypted,
+                "UTF-8",
+                now.Year,
+                now.Month,
+                now.Day,
+                EscapeHtml(_description),
+                EscapeHtml(_title),
+                registerByStr
+           );
     }
 
     // Same as python: escape(self._description, quote=True),
