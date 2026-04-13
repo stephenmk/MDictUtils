@@ -578,7 +578,7 @@ public sealed class MDictWriter
         int indexSize = _recordBlocks.Sum(static b => b.IndexEntryLength);
         var indexData = new byte[indexSize];
 
-        int maxBlockSize = _keyBlocks.Max(static b => b.IndexEntryLength);
+        int maxBlockSize = _recordBlocks.Max(static b => b.IndexEntryLength);
         var blockBuffer = maxBlockSize < 256
             ? stackalloc byte[maxBlockSize]
             : new byte[maxBlockSize];
