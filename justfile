@@ -47,6 +47,7 @@ sln:
   dotnet sln MDictUtils.slnx add Cli/Cli.csproj
   dotnet sln MDictUtils.slnx add Lib/Lib.csproj
   dotnet sln MDictUtils.slnx add Lib.Tests/Lib.Tests.csproj
+  dotnet sln MDictUtils.slnx add Lib.Benchmark/Lib.Benchmark.csproj
   dotnet build MDictUtils.slnx
 
 alias r := run
