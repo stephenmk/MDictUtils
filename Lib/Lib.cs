@@ -1,11 +1,11 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.IO.Compression;
 
 namespace Lib;
 
@@ -23,7 +23,7 @@ internal class OffsetTableEntry
     public required byte[] KeyNull { get; init; }
     public required int KeyLen { get; init; }
     public required long Offset { get; init; }
-    public required byte[] RecordNull { get; set; }
+    // public required byte[] RecordNull { get; set; }
     public required bool IsMdd { get; init; }
     public required long RecordSize { get; init; }
     public required long RecordPos { get; init; }
@@ -45,7 +45,8 @@ internal class OffsetTableEntry
         sb.Append($"IsMdd='{IsMdd}', ");
         sb.Append($"Key='{BytesToString(Key)}', ");
         sb.Append($"KeyNull='{BytesToString(KeyNull)}', ");
-        sb.Append($"RecordNull='{BytesToString(RecordNull)}')");
+        // sb.Append($"RecordNull='{BytesToString(RecordNull)}'");
+        sb.Append(')');
         return sb.ToString();
     }
 }
@@ -55,6 +56,7 @@ internal class OffsetTableEntry
 /// </summary>
 internal abstract class MdxBlock
 {
+    private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     protected long _decompSize;
     protected byte[] _compData;
     protected long _compSize;
@@ -67,32 +69,45 @@ internal abstract class MdxBlock
 
         // Console.WriteLine("[Debug] Calling MdxBlock...");
 
-        var decompData = new List<byte>();
+        var decompDataSize = offsetTable.Sum(LenBlockEntry);
+        var decompData = _arrayPool.Rent(decompDataSize);
+
+        var maxBlockSize = offsetTable.Max(LenBlockEntry);
+        var blockBuffer = maxBlockSize < 256
+            ? stackalloc byte[maxBlockSize]
+            : new byte[maxBlockSize];
+
+        int totalSize = 0;
         foreach (var entry in offsetTable)
         {
-            var blockEntry = GetBlockEntry(entry, version);
+            int blockSize = GetBlockEntry(entry, version, blockBuffer);
             // Console.WriteLine($"[Debug] BlockEntry ({blockEntry.Length} bytes): {BitConverter.ToString(blockEntry)}");
-            decompData.AddRange(blockEntry);
+            var source = blockBuffer[..blockSize];
+            var destination = decompData.AsSpan(start: totalSize, length: blockSize);
+            source.CopyTo(destination);
+            totalSize += blockSize;
         }
 
-        var decompArray = decompData.ToArray();
         // Console.WriteLine("[Debug] Building MdxBlock...");
-        _decompSize = decompArray.Length;
+        _decompSize = totalSize;
         // Console.WriteLine($"[Debug] Decompressed array length (_decompSize): {_decompSize}");
         // Common.PrintPythonStyle(decompArray);
 
-        _compData = MdxCompress(decompArray, compressionType);
+        _compData = MdxCompress(decompData[..totalSize], compressionType);
         _compSize = _compData.Length;
         // Console.WriteLine($"[Debug] Compressed array length (_compSize): {_compSize}");
 
         _version = version;
+
+        _arrayPool.Return(decompData);
     }
 
     public ReadOnlySpan<byte> BlockData => _compData;
 
-    public abstract byte[] GetIndexEntry();
-    protected abstract byte[] GetBlockEntry(OffsetTableEntry entry, string version);
+    public abstract void GetIndexEntry(Span<byte> buffer);
+    protected abstract int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer);
     public abstract int LenBlockEntry(OffsetTableEntry entry);
+    public abstract int IndexEntryLength { get; }
 
     // Called in MdxBlock init
     public static byte[] MdxCompress(ReadOnlySpan<byte> data, int compressionType)
@@ -101,27 +116,26 @@ internal abstract class MdxBlock
             throw new NotSupportedException("Only compressionType=2 (Zlib) is supported in this version.");
 
         // Compression type (little-endian)
-        var lend = Common.ToLittleEndian(BitConverter.GetBytes(compressionType)); // <L in Python
+        Span<byte> lend = stackalloc byte[4];
+        Common.ToLittleEndian((uint)compressionType, lend); // <L in Python
 
         // Adler32 checksum (big-endian)
         uint adler = Common.Adler32(data);
-        var adlerBytes = Common.ToBigEndian(adler); // Python uses >L
+        Span<byte> adlerBytes = stackalloc byte[4];
+        Common.ToBigEndian(adler, adlerBytes); // Python uses >L
 
         // byte[] header = [.. lend, .. adlerBytes];
 
-        using var ms = new MemoryStream();
+        // It's possible for compressed data to be larger than the uncompressed.
+        // See: https://zlib.net/zlib_tech.html
+        // "For the default settings, ... five bytes per 16 KB block (about 0.03%)"
+        // So we have to rent a size a little bit larger.
+        var buffer = _arrayPool.Rent(data.Length + (data.Length * 5 / 16_000) + 32);
 
-        // return header + zlib.compress(data)
-        // python default is -1 == 6 , see: https://docs.python.org/3/library/zlib.html#zlib.Z_DEFAULT_COMPRESSION
-        // c# are cooked, custom-made levels, and may not correspond to anything
-        // https://learn.microsoft.com/en-us/dotnet/api/system.io.compression.compressionlevel?view=net-10.0
-        //
-        // There is no reliable way to get the same exact bytes, so live with that
-        using (var z = new ZLibStream(ms, CompressionLevel.Optimal, leaveOpen: true))
-        {
-            z.Write(data);
-        }
-        var res = ms.ToArray();
+        var size = ZLibCompression.Compress(data, buffer);
+
+        byte[] compressed = [.. lend, .. adlerBytes, .. buffer.AsSpan(..size)];
+        _arrayPool.Return(buffer);
 
         // Common.PrintPythonStyle(data);
         // Common.PrintPythonStyle(lend);
@@ -130,14 +144,16 @@ internal abstract class MdxBlock
         // Console.WriteLine($"header: {BitConverter.ToString(header)}");
         // Common.PrintPythonStyle(final);
 
-        return [.. lend, .. adlerBytes, .. res];
+        return compressed;
     }
 }
 
 internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressionType, string version)
     : MdxBlock(offsetTable, compressionType, version)
 {
-    public override byte[] GetIndexEntry()
+    public override int IndexEntryLength => 16;
+
+    public override void GetIndexEntry(Span<byte> buffer)
     {
         // Console.WriteLine("Called GetIndexEntry on MDXRECORDBLOCK");
         // Console.WriteLine($"    compSize {_compSize}; decompsize {_decompSize}");
@@ -146,54 +162,54 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
             throw new NotImplementedException();
         }
 
+        Debug.Assert(buffer.Length == IndexEntryLength);
+
         // Big-endian 64-bit values
-        return
-        [
-            .. Common.ToBigEndian((ulong)_compSize),
-            .. Common.ToBigEndian((ulong)_decompSize),
-        ];
+        Common.ToBigEndian((ulong)_compSize, buffer[..8]);
+        Common.ToBigEndian((ulong)_decompSize, buffer[8..16]);
     }
 
     // rg: get_record_null
     // We overwrite "return entry.RecordNull"
-    protected override byte[] GetBlockEntry(OffsetTableEntry entry, string version)
+    protected override int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer)
     {
-        byte[] record = ReadRecord(entry.FilePath, entry.RecordPos, (int)entry.RecordSize, entry.IsMdd);
-        entry.RecordNull = record;
-        return record;
+        int size = ReadRecord(entry.FilePath, entry.RecordPos, (int)entry.RecordSize, entry.IsMdd, buffer);
+        // entry.RecordNull = buffer[..size].ToArray();
+        return size;
     }
 
     /// <summary>
     /// Helper method: read from file and null-terminate
     /// </summary>
-    private static byte[] ReadRecord(string filePath, long pos, int size, bool isMdd)
+    private static int ReadRecord(string filePath, long pos, int size, bool isMdd, Span<byte> buffer)
     {
         if (size < 1) throw new ArgumentException("Size must be >= 1", nameof(size));
 
-        byte[] record = new byte[size];
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
 
         fs.Seek(pos, SeekOrigin.Begin);
         if (isMdd)
         {
-            // For MDD, just read the whole record
-            int bytesRead = fs.Read(record, 0, size);
-            if (bytesRead < size)
+            int totalRead = 0;
+            while (true)
             {
-                // Trim if fewer bytes were read
-                Array.Resize(ref record, bytesRead);
+                int bytesRead = fs.Read(buffer[totalRead..]);
+                totalRead += bytesRead;
+                if (bytesRead == 0)
+                    break;
             }
+            // For MDD, apparently fewer bytes than the expected size might be read?
+            return totalRead;
         }
         else
         {
             // For MDX, read size-1 bytes and append null byte
-            int bytesRead = fs.Read(record, 0, size - 1);
-            record[bytesRead] = 0; // null-terminate
+            fs.ReadExactly(buffer[..(size - 1)]);
+            buffer[size - 1] = 0; // null-terminate
+            return size;
         }
 
         // Console.WriteLine($"[ReadRecord] Record length: {record.Length}");
-
-        return record;
     }
 
 
@@ -231,14 +247,14 @@ internal class MdxKeyBlock : MdxBlock
         _lastKeyLen = offsetTable[^1].KeyLen;
     }
 
-    protected override byte[] GetBlockEntry(OffsetTableEntry entry, string version)
+    protected override int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer)
     {
         Debug.Assert(version == "2.0");
-        return
-        [
-            .. Common.ToBigEndian((ulong)entry.Offset),
-            .. entry.KeyNull,
-        ];
+
+        Common.ToBigEndian((ulong)entry.Offset, buffer[..8]);
+        entry.KeyNull.CopyTo(buffer[8..]);
+
+        return 8 + entry.KeyNull.Length;
     }
 
     // Approximate for version 2.0
@@ -247,19 +263,23 @@ internal class MdxKeyBlock : MdxBlock
         return 8 + entry.KeyNull.Length;
     }
 
-    public override byte[] GetIndexEntry()
+    public override int IndexEntryLength
+        => 8 + 2 + _firstKey.Length + 2 + _lastKey.Length + 8 + 8;
+
+    public override void GetIndexEntry(Span<byte> buffer)
     {
         Debug.Assert(_version == "2.0");
-        return
-        [
-            .. Common.ToBigEndian((ulong)_numEntries),
-            .. Common.ToBigEndian((ushort)_firstKeyLen),
-            .. _firstKey,
-            .. Common.ToBigEndian((ushort)_lastKeyLen),
-            .. _lastKey,
-            .. Common.ToBigEndian((ulong)_compSize),
-            .. Common.ToBigEndian((ulong)_decompSize),
-        ];
+        Debug.Assert(buffer.Length == IndexEntryLength);
+
+        var r = new SpanReader<byte>(buffer);
+
+        Common.ToBigEndian((ulong)_numEntries, r.Read(8));
+        Common.ToBigEndian((ushort)_firstKeyLen, r.Read(2));
+        _firstKey.CopyTo(r.Read(_firstKey.Length));
+        Common.ToBigEndian((ushort)_lastKeyLen, r.Read(2));
+        _lastKey.CopyTo(r.Read(_lastKey.Length));
+        Common.ToBigEndian((ulong)_compSize, r.Read(8));
+        Common.ToBigEndian((ulong)_decompSize, r.Read(8));
     }
 }
 
@@ -379,17 +399,17 @@ public sealed class MDictWriter
         {
             // Console.WriteLine($"dict item: {item}");
             var keyEnc = _innerEncoding.GetBytes(item.Key);
-            var keyNull = _innerEncoding.GetBytes(item.Key + "\0");
+            var keyNull = _innerEncoding.GetBytes($"{item.Key}\0");
             var keyLen = keyEnc.Length / _encodingLength;
 
-            var recordNull = _innerEncoding.GetBytes(item.Path);
+            // var recordNull = _innerEncoding.GetBytes(item.Path);
 
             var tableEntry = new OffsetTableEntry
             {
                 Key = keyEnc,
                 KeyNull = keyNull,
                 KeyLen = keyLen,
-                RecordNull = recordNull,
+                // RecordNull = recordNull,
                 Offset = offset,
                 RecordSize = item.Size,
                 RecordPos = item.Pos,
@@ -506,29 +526,78 @@ public sealed class MDictWriter
     private void BuildKeybIndex()
     {
         Debug.Assert(_version == "2.0");
-        var decompData = new List<byte>();
-        foreach (var block in _keyBlocks)
+
+        if (_keyBlocks is [])
         {
-            var indexEntry = block.GetIndexEntry();
-            _logger.LogIndexEntry(indexEntry);
-            decompData.AddRange(indexEntry);
+            _keybIndexDecompSize = 0;
+            _keybIndex = [];
+            _keybIndexCompSize = 0;
+            return;
         }
 
-        var decompArray = decompData.ToArray();
-        _keybIndexDecompSize = decompArray.Length;
-        _keybIndex = MdxBlock.MdxCompress(decompArray, _compressionType);
+        var arrayPool = ArrayPool<byte>.Shared;
+
+        int decompDataTotalSize = _keyBlocks.Sum(static b => b.IndexEntryLength);
+        var decompData = arrayPool.Rent(decompDataTotalSize);
+
+        int maxBlockSize = _keyBlocks.Max(static b => b.IndexEntryLength);
+        var blockBuffer = maxBlockSize < 256
+            ? stackalloc byte[maxBlockSize]
+            : new byte[maxBlockSize];
+
+        int bytesWritten = 0;
+        foreach (var block in _keyBlocks)
+        {
+            var indexEntry = blockBuffer[..block.IndexEntryLength];
+            block.GetIndexEntry(indexEntry);
+            _logger.LogIndexEntry(indexEntry);
+
+            var destination = decompData.AsSpan().Slice(bytesWritten, indexEntry.Length);
+            indexEntry.CopyTo(destination);
+            bytesWritten += indexEntry.Length;
+        }
+
+        Debug.Assert(bytesWritten == decompDataTotalSize);
+
+        _keybIndexDecompSize = bytesWritten;
+        _keybIndex = MdxBlock.MdxCompress(decompData.AsSpan(..bytesWritten), _compressionType);
         _keybIndexCompSize = _keybIndex.Length;
+
+        arrayPool.Return(decompData);
     }
 
     private void BuildRecordbIndex()
     {
-        List<byte> indexData = [];
+        if (_recordBlocks is [])
+        {
+            _recordbIndex = [];
+            _recordbIndexSize = 0;
+            return;
+        }
+
+        int indexSize = _recordBlocks.Sum(static b => b.IndexEntryLength);
+        var indexData = new byte[indexSize];
+
+        int maxBlockSize = _keyBlocks.Max(static b => b.IndexEntryLength);
+        var blockBuffer = maxBlockSize < 256
+            ? stackalloc byte[maxBlockSize]
+            : new byte[maxBlockSize];
+
+        int bytesWritten = 0;
         foreach (var block in _recordBlocks)
         {
-            indexData.AddRange(block.GetIndexEntry());
+            var indexEntry = blockBuffer[..block.IndexEntryLength];
+            block.GetIndexEntry(indexEntry);
+
+            var destination = indexData.AsSpan().Slice(bytesWritten, indexEntry.Length);
+            indexEntry.CopyTo(destination);
+            bytesWritten += indexEntry.Length;
         }
-        _recordbIndex = [.. indexData];
-        _recordbIndexSize = _recordbIndex.Length;
+
+        Debug.Assert(bytesWritten == indexData.Length);
+
+        _recordbIndex = indexData;
+        _recordbIndexSize = indexData.Length;
     }
 
     public void Write(Stream outfile)
@@ -548,7 +617,8 @@ public sealed class MDictWriter
         // Console.WriteLine("        " + string.Join(" ", headerBytes.Select(b => b.ToString("X2"))));
 
         // Write header length (big-endian)
-        var lengthBytes = Common.ToBigEndian((uint)headerBytes.Length);
+        Span<byte> lengthBytes = stackalloc byte[4];
+        Common.ToBigEndian((uint)headerBytes.Length, lengthBytes);
         stream.Write(lengthBytes);
 
         // Write header string
@@ -556,7 +626,8 @@ public sealed class MDictWriter
 
         // Write Adler32 checksum (little-endian)
         uint checksum = Common.Adler32(headerBytes);
-        var checksumBytes = Common.ToLittleEndian(checksum);
+        Span<byte> checksumBytes = stackalloc byte[4];
+        Common.ToLittleEndian(checksum, checksumBytes);
 
         stream.Write(checksumBytes);
     }
@@ -634,23 +705,23 @@ public sealed class MDictWriter
             throw new NotImplementedException();
         }
 
-        long keyblocksTotal = _keyBlocks.Sum(static b => b.BlockData.Length);
+        long keyBlocksTotalValue = _keyBlocks.Sum(static b => b.BlockData.Length);
 
-        ReadOnlySpan<byte> preamble =
-        [
-            .. Common.ToBigEndian((ulong)_keyBlocks.Count),
-            .. Common.ToBigEndian((ulong)_numEntries),
-            .. Common.ToBigEndian((ulong)_keybIndexDecompSize),
-            .. Common.ToBigEndian((ulong)_keybIndexCompSize),
-            .. Common.ToBigEndian((ulong)keyblocksTotal),
-        ];
+        Span<byte> preamble = stackalloc byte[5 * 8]; // Five 8-byte buffers
 
-        var preambleChecksum = Common.Adler32(preamble);
-        var checksumBytes = Common.ToBigEndian(preambleChecksum);
+        Common.ToBigEndian((ulong)_keyBlocks.Count, preamble[0..8]);
+        Common.ToBigEndian((ulong)_numEntries, preamble[8..16]);
+        Common.ToBigEndian((ulong)_keybIndexDecompSize, preamble[16..24]);
+        Common.ToBigEndian((ulong)_keybIndexCompSize, preamble[24..32]);
+        Common.ToBigEndian((ulong)keyBlocksTotalValue, preamble[32..40]);
+
+        uint checksumValue = Common.Adler32(preamble);
+        Span<byte> checksum = stackalloc byte[4];
+        Common.ToBigEndian(checksumValue, checksum);
 
         outfile.Write(preamble);
-        outfile.Write(checksumBytes);
-        outfile.Write(_keybIndex, 0, _keybIndex.Length);
+        outfile.Write(checksum);
+        outfile.Write(_keybIndex.AsSpan());
 
         foreach (var block in _keyBlocks)
         {
@@ -667,16 +738,15 @@ public sealed class MDictWriter
 
         long recordblocksTotal = _recordBlocks.Sum(static b => b.BlockData.Length);
 
-        ReadOnlySpan<byte> preamble =
-        [
-            .. Common.ToBigEndian((ulong)_recordBlocks.Count),
-            .. Common.ToBigEndian((ulong)_numEntries),
-            .. Common.ToBigEndian((ulong)_recordbIndexSize),
-            .. Common.ToBigEndian((ulong)recordblocksTotal),
-        ];
+        Span<byte> preamble = stackalloc byte[4 * 8]; // Four 8-byte buffers
+
+        Common.ToBigEndian((ulong)_recordBlocks.Count, preamble[0..8]);
+        Common.ToBigEndian((ulong)_numEntries, preamble[8..16]);
+        Common.ToBigEndian((ulong)_recordbIndexSize, preamble[16..24]);
+        Common.ToBigEndian((ulong)recordblocksTotal, preamble[24..32]);
 
         outfile.Write(preamble);
-        outfile.Write(_recordbIndex, 0, _recordbIndex.Length);
+        outfile.Write(_recordbIndex.AsSpan());
 
         foreach (var block in _recordBlocks)
         {
@@ -690,7 +760,7 @@ internal partial class MDictKeyComparer
     /// <summary>
     /// https://docs.python.org/3/library/string.html#string.punctuation
     /// </summary>
-    public static readonly char[] PunctuationChars = [.. "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"];
+    public const string PunctuationChars = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
     /// <summary>
     /// Regex to strip the python punctuation characters, and also the space character.

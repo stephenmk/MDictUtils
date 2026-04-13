@@ -1,6 +1,9 @@
 using System;
-using System.IO;
+using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Linq;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Lib;
 
@@ -9,49 +12,43 @@ namespace Lib;
 /// </summary>
 internal static class Common
 {
-    // To simplify much of this, maybe we can use:
-    // https://learn.microsoft.com/en-us/dotnet/api/system.buffers.binary?view=net-10.0
-    public static ReadOnlySpan<byte> ToBigEndian(Span<byte> bytes)
+    public static void ToLittleEndian(uint input, Span<byte> output)
     {
-        if (BitConverter.IsLittleEndian) bytes.Reverse();
-        return bytes;
+        Debug.Assert(output.Length == sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(output, input);
     }
 
-    public static ReadOnlySpan<byte> ToLittleEndian(Span<byte> bytes)
+    public static void ToBigEndian(ulong input, Span<byte> output)
     {
-        if (!BitConverter.IsLittleEndian) bytes.Reverse();
-        return bytes;
+        Debug.Assert(output.Length == sizeof(ulong));
+        BinaryPrimitives.WriteUInt64BigEndian(output, input);
     }
 
-    public static ReadOnlySpan<byte> ToBigEndian(ulong value) => ToBigEndian(BitConverter.GetBytes(value));
-    public static ReadOnlySpan<byte> ToBigEndian(uint value) => ToBigEndian(BitConverter.GetBytes(value));
-    public static ReadOnlySpan<byte> ToBigEndian(ushort value) => ToBigEndian(BitConverter.GetBytes(value));
-
-    public static ReadOnlySpan<byte> ToLittleEndian(ulong value) => ToLittleEndian(BitConverter.GetBytes(value));
-    public static ReadOnlySpan<byte> ToLittleEndian(uint value) => ToLittleEndian(BitConverter.GetBytes(value));
-    public static ReadOnlySpan<byte> ToLittleEndian(ushort value) => ToLittleEndian(BitConverter.GetBytes(value));
-
-    public static int ReadInt32BigEndian(BinaryReader br)
-        => BitConverter.ToInt32(ToBigEndian(br.ReadBytes(4)));
-
-    public static int ReadUInt16BigEndian(ReadOnlySpan<byte> buffer, int offset)
+    public static void ToBigEndian(uint input, Span<byte> output)
     {
-        Span<byte> slice = stackalloc byte[2];
-        buffer.Slice(offset, 2).CopyTo(slice);
-        return BitConverter.ToUInt16(ToBigEndian(slice));
+        Debug.Assert(output.Length == sizeof(uint));
+        BinaryPrimitives.WriteUInt32BigEndian(output, input);
     }
 
-    public static int ReadInt32BigEndian(Span<byte> bytes)
-        => BitConverter.ToInt32(ToBigEndian(bytes));
+    public static void ToBigEndian(ushort input, Span<byte> output)
+    {
+        Debug.Assert(output.Length == sizeof(ushort));
+        BinaryPrimitives.WriteUInt16BigEndian(output, input);
+    }
 
-    public static uint ReadUInt32BigEndian(Span<byte> bytes)
-        => BitConverter.ToUInt32(ToBigEndian(bytes));
+    public static T ReadBigEndian<T>(ReadOnlySpan<byte> input, bool isUnsigned)
+        where T : unmanaged, IBinaryInteger<T>
+    {
+        Debug.Assert(input.Length == Unsafe.SizeOf<T>());
+        return T.ReadBigEndian(input, isUnsigned);
+    }
 
-    public static long ReadInt64BigEndian(Span<byte> bytes)
-        => BitConverter.ToInt64(ToBigEndian(bytes));
-
-    public static ulong ReadUInt64BigEndian(Span<byte> bytes)
-        => BitConverter.ToUInt64(ToBigEndian(bytes));
+    public static T ReadLittleEndian<T>(ReadOnlySpan<byte> input, bool isUnsigned)
+        where T : unmanaged, IBinaryInteger<T>
+    {
+        Debug.Assert(input.Length == Unsafe.SizeOf<T>());
+        return T.ReadLittleEndian(input, isUnsigned);
+    }
 
     public static void PrintPythonStyle(byte[] data)
     {

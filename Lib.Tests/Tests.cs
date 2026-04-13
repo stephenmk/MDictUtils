@@ -280,8 +280,9 @@ public class Ripemd128Tests
     public void TestKnownVectors(string input, string expected)
     {
         byte[] inputBytes = Encoding.UTF8.GetBytes(input);
-        byte[] hash = Ripemd128.ComputeHash(inputBytes);
-        string hexHash = Convert.ToHexString(hash).ToLowerInvariant();
+        Span<byte> hash = stackalloc byte[16];
+        int size = Ripemd128.ComputeHash(inputBytes, hash);
+        string hexHash = Convert.ToHexString(hash[..size]).ToLowerInvariant();
         Assert.Equal(expected, hexHash);
     }
 }
