@@ -78,7 +78,6 @@ internal sealed class MDictWriterLogger : IMDictWriterLogger
     public void LogRecordBlocks(IReadOnlyList<MdxRecordBlock> recordBlocks)
     {
         WriteMessage($"Built {recordBlocks.Count} record blocks.");
-        WriteMessage($"Built {recordBlocks}."); // TODO: this only prints the type of the collection.
         WriteSeparator();
     }
 

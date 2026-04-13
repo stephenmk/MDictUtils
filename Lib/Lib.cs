@@ -208,10 +208,7 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
             buffer[size - 1] = 0; // null-terminate
             return size;
         }
-
-        // Console.WriteLine($"[ReadRecord] Record length: {record.Length}");
     }
-
 
     public override int LenBlockEntry(OffsetTableEntry entry)
     {
@@ -249,11 +246,8 @@ internal class MdxKeyBlock : MdxBlock
 
     protected override int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer)
     {
-        Debug.Assert(version == "2.0");
-
         Common.ToBigEndian((ulong)entry.Offset, buffer[..8]);
         entry.KeyNull.CopyTo(buffer[8..]);
-
         return 8 + entry.KeyNull.Length;
     }
 
