@@ -56,7 +56,7 @@ internal static class ZLibCompression
         {
             z.Write(input);
         }
-        return Convert.ToInt32(ms.Length);
+        return (int)ms.Position;
     }
 
     /// The .ToArray() allocation here is unfortunately unavoidable.
