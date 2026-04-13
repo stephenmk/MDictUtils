@@ -137,12 +137,8 @@ internal abstract class MdxBlock
         byte[] compressed = [.. lend, .. adlerBytes, .. buffer.AsSpan(..size)];
         _arrayPool.Return(buffer);
 
-        // Common.PrintPythonStyle(data);
-        // Common.PrintPythonStyle(lend);
         // Console.WriteLine($"adler: {adler}");
-        // Common.PrintPythonStyle(adlerBytes);
         // Console.WriteLine($"header: {BitConverter.ToString(header)}");
-        // Common.PrintPythonStyle(final);
 
         return compressed;
     }

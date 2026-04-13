@@ -173,18 +173,30 @@ public class HeaderTests
 // Pack and Unpack should be reversable
 public class DoUndoTests
 {
-    const string testContent =
-        """
-        apple
-        A fruit that grows on trees.
-        </>
-        banana
-        A long yellow fruit.
-        </>
-        """;
+    public static TheoryData<string> TestContents => new()
+        {
+            """
+            single
+            Just one entry.
+            </>
+            """,
 
-    [Fact]
-    public void DoUndo_PackAndUnpackMdx_ProducesIdenticalFile()
+            """
+            apple
+            A fruit that grows on trees.
+            </>
+            banana
+            A long yellow fruit.
+            </>
+            @cc-100
+            xxx
+            </>
+            """,
+        };
+
+    [Theory]
+    [MemberData(nameof(TestContents))]
+    public void DoUndo_PackAndUnpackMdx_ProducesIdenticalFile(string testContent)
     {
         const bool isMdd = false;
 
@@ -225,8 +237,9 @@ public class DoUndoTests
         }
     }
 
-    [Fact]
-    public void DoUndo_PackAndUnpackMdd_ProducesIdenticalFile()
+    [Theory]
+    [MemberData(nameof(TestContents))]
+    public void DoUndo_PackAndUnpackMdd_ProducesIdenticalFile(string testContent)
     {
         const bool isMdd = true;
 
