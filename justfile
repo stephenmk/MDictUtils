@@ -11,16 +11,18 @@ test *args:
   dotnet test Lib.Tests/ {{args}}
 
 run:
-  dotnet run --project Cli -- assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html
-  dotnet run --project Cli -- assets/out2.mdd -a assets/stub.txt
+  dotnet build Cli -c Release
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdd -a assets/stub.txt
 
 oracle:
   mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html -a assets/extra.txt --description assets/description.html
   mdict assets/out1.mdd -a assets/stub.txt
 
 do-undo:
-  dotnet run --project Cli -- assets/out1.mdd -a assets/stub.txt && \
-  dotnet run --project Cli -- assets/out1.mdd -x
+  dotnet build Cli -c Release
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out1.mdd -a assets/stub.txt && \
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out1.mdd -x
   diff --strip-trailing-cr stub.txt assets/stub.txt
   rm stub.txt
 
@@ -49,5 +51,51 @@ sln:
   dotnet sln MDictUtils.slnx add Lib.Benchmark/Lib.Benchmark.csproj
   dotnet build MDictUtils.slnx
 
+# Re-build jitendex from a downloaded, unzipped dict at .tmp/ folder
+# Download it at: https://jitendex.org/pages/downloads.html
+jitendex:
+  mkdir -p build2/out
+  dotnet build Cli -c Release
+  # Extract txt/media files into build2 folder
+  dotnet Cli/bin/Release/net*/Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdx -d build2
+  dotnet Cli/bin/Release/net*/Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdd -d build2/media
+  # Re-build the dict from build2 folder
+  dotnet Cli/bin/Release/net*/Cli.dll \
+      -a build2/jitendex.mdx.txt \
+      --title build2/jitendex.mdx.title.html \
+      --description build2/jitendex.mdx.description.html \
+      build2/out/jitendex.mdx
+  dotnet Cli/bin/Release/net*/Cli.dll \
+      -a build2/media \
+      --title build2/jitendex.mdx.title.html \
+      --description build2/jitendex.mdx.description.html \
+      build2/out/jitendex.mdd
+  # Move the other original files so we have a full dict at build2 folder
+  cp .tmp/jitendex-mdict/jitendex/common.css build2/out/common.css
+  cp .tmp/jitendex-mdict/jitendex/jitendex.css build2/out/jitendex.css
+  cp .tmp/jitendex-mdict/jitendex/jitendex.png build2/out/jitendex.png
+
+# Same as jitendex but with mdict
+jitendex-py:
+  mkdir -p build1/out
+  mdict -x .tmp/jitendex-mdict/jitendex/jitendex.mdx -d build1
+  mdict -x .tmp/jitendex-mdict/jitendex/jitendex.mdd -d build1/media
+  mdict \
+      -a build1/jitendex.mdx.txt \
+      --title build1/jitendex.mdx.title.html \
+      --description build1/jitendex.mdx.description.html \
+      build2/out/jitendex.mdx
+  mdict \
+      -a build1/media \
+      --title build1/jitendex.mdx.title.html \
+      --description build1/jitendex.mdx.description.html \
+      build1/out/jitendex.mdd
+  # Move the other original files so we have a full dict at build1 folder
+  cp .tmp/jitendex-mdict/jitendex/common.css build1/out/common.css
+  cp .tmp/jitendex-mdict/jitendex/jitendex.css build1/out/jitendex.css
+  cp .tmp/jitendex-mdict/jitendex/jitendex.png build1/out/jitendex.png
+
+
+alias b := bench
 alias r := run
 alias t := test
