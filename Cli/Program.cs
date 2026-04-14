@@ -13,6 +13,7 @@ static class Program
 {
     sealed record Args
     (
+        bool Verbose,
         string MdictPath,
         string[] AddPaths,
         string? TitlePath,
@@ -48,7 +49,11 @@ static class Program
             Description = "Dictionary mdx/mdd file"
         };
 
-        // TODO: This is supposed to have >1 arity
+        Option<bool> verboseFlag = new("--verbose", "-v")
+        {
+            Description = "Verbose mode: enable logging",
+        };
+
         // TODO: should be a subcommand
         // It's not nullable, defaults to empty list
         Option<string[]> addPaths = new("--add", "-a")
@@ -117,6 +122,7 @@ static class Program
 
             // TODO: if we are mdx, we should only accept txt as in --add
 
+            var parsedVerboseFlag = parseResult.GetValue(verboseFlag);
             var parsedAddPaths = parseResult.GetValue(addPaths) ?? [];
             var parsedTitlePath = parseResult.GetValue(titlePath);
             var parsedDescriptionPath = parseResult.GetValue(descriptionPath);
@@ -144,6 +150,7 @@ static class Program
 
             Args arguments = new
             (
+                Verbose: parsedVerboseFlag,
                 MdictPath: parsedMdictPath,
                 AddPaths: parsedAddPaths,
                 TitlePath: parsedTitlePath,
@@ -174,7 +181,10 @@ static class Program
 
     static void Run(Args args)
     {
-        Console.Error.WriteLine(args);
+        if (args.Verbose)
+        {
+            Console.Error.WriteLine(args);
+        }
 
         if (args.AddPaths.Length > 0)
         {
@@ -204,7 +214,7 @@ static class Program
                 Description: description,
                 IsMdd: args.IsMdd);
 
-            MDictWriter writer = new(packed, metadata);
+            MDictWriter writer = new(packed, metadata, logging: args.Verbose);
 
             // creates intermediate directories if needed
             // so that it works if MdictPath is a/b/thing.mdx
