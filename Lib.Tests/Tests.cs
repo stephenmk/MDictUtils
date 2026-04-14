@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Xunit;
+using Lib.Build;
 
 namespace Lib.Tests;
 
@@ -20,11 +21,11 @@ public class MDictWriterTests
     public void Write_CreatesValidFile()
     {
         var entries = new List<MDictEntry>();
-        var options = new MDictWriterOptions(
+        var metadata = new MDictMetadata(
             Title: "Test Dictionary",
             Description: "A test dictionary");
 
-        var writer = new MDictWriter(entries, options);
+        var writer = new MDictWriter(entries, metadata);
         var outputPath = Path.GetTempFileName();
 
         try
@@ -98,7 +99,8 @@ public class MDictSorterTests
         var expected = new List<(string Key, int ExpectedIndex)>(items);
         expected.Sort((a, b) => a.ExpectedIndex.CompareTo(b.ExpectedIndex));
 
-        items.Sort((a, b) => MDictKeyComparer.Compare(a.Key, b.Key, isMdd: false));
+        var comparer = new MDictKeyComparer();
+        items.Sort((a, b) => comparer.Compare(a.Key, b.Key, isMdd: false));
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -160,8 +162,8 @@ public class HeaderTests
     public void GetHeaderString_ShouldNotReplaceLineEndingsInTitle()
     {
         const string title = "Title\r\n\n[2026-04-04]";
-        var opts = new MDictWriterOptions(Title: title);
-        var writer = new MDictWriter([], opts);
+        var metadata = new MDictMetadata(Title: title);
+        var writer = new MDictWriter([], metadata);
         var header = writer.GetHeaderString();
         Assert.Contains($"Title=\"{title}\"", header);
         // Should not have newlines between elements

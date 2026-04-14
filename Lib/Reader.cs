@@ -498,8 +498,8 @@ public partial class MDict
 
         Span<byte> idBytesBuffer = stackalloc byte[8];
 
-        ReadOnlySpan<byte> unicodeDelimiter = [0x00, 0x00];
-        ReadOnlySpan<byte> otherDelimiter = [0x00];
+        ReadOnlySpan<byte> utf16delimiter = [0x00, 0x00];
+        ReadOnlySpan<byte> utf8delimiter = [0x00];
 
         while (keyStartIndex < keyBlock.Length)
         {
@@ -513,8 +513,8 @@ public partial class MDict
                 : Common.ReadBigEndian<long>(idBytes, false);
 
             var delimiter = _encoding == Encoding.Unicode
-                ? unicodeDelimiter
-                : otherDelimiter;
+                ? utf16delimiter
+                : utf8delimiter;
             int width = delimiter.Length;
 
             // Find the end of the key text

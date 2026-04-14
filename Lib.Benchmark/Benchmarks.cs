@@ -10,7 +10,7 @@ public class Benchmarks
     private readonly string _mdxFilePath = Path.GetTempFileName();
 
     private readonly List<MDictEntry> Entries = [];
-    private readonly MDictWriterOptions Options = new(Logging: false);
+    private readonly MDictMetadata Metadata = new();
 
     [GlobalSetup]
     public void Setup()
@@ -35,7 +35,7 @@ public class Benchmarks
         // Initialize MDX file.
         using (FileStream fs = new(_mdxFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
         {
-            var mdict = new MDictWriter(Entries, Options);
+            var mdict = new MDictWriter(Entries, Metadata, logging: false);
             mdict.Write(fs);
         }
     }
@@ -64,7 +64,7 @@ public class Benchmarks
     {
         var tempFile = Path.Join(_tmpDirectoryPath, Guid.NewGuid().ToString());
         using FileStream fs = new(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
-        var mdict = new MDictWriter(Entries, Options);
+        var mdict = new MDictWriter(Entries, Metadata, logging: false);
         mdict.Write(fs);
     }
 
