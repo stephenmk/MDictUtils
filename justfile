@@ -10,10 +10,11 @@ bench:
 test *args:
   dotnet test Lib.Tests/ {{args}}
 
-run:
+# Run the code against the fixtures
+run *args:
   dotnet build Cli -c Release
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdd -a assets/stub.txt
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html {{args}}
+  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdd -a assets/stub.txt {{args}}
 
 oracle:
   mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html -a assets/extra.txt --description assets/description.html

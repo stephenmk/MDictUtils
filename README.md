@@ -34,7 +34,7 @@ The unsafe block is implemented to avoid allocations when zipping, and remains t
 - The skeleton of this repo was from [unit testing tutorial](https://docs.microsoft.com/dotnet/core/testing/unit-testing-with-dotnet-test)
 
 ### TODO
-- [ ] CI run on bigendian
+- [x] Update justfile with the cmd to build jitendex
 - [ ] Remove all non-version-2.0 branches because noise
 - [ ] Rename things for clarity
 - [ ] Do decryption (?)
@@ -43,6 +43,7 @@ The unsafe block is implemented to avoid allocations when zipping, and remains t
 - [ ] Explore how to use as a library (writing a glossary from memory instead of disk)
 - [ ] How does one use perf in c#?
 - [ ] Doc generator? [this](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/xmldoc/) or [this](https://github.com/dotnet/docfx)
+- [ ] CI run on bigendian
 
 ### Others
 - [ ] How good is [pyglossary](https://github.com/ilius/pyglossary) for wty/Jitendex? Test in goldendict

@@ -90,6 +90,7 @@ static class Program
         };
 
         rootCommand.Arguments.Add(mdictPath);
+        rootCommand.Options.Add(verboseFlag);
         rootCommand.Options.Add(addPaths);
         rootCommand.Options.Add(titlePath);
         rootCommand.Options.Add(descriptionPath);
