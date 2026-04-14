@@ -49,3 +49,19 @@ The unsafe block is implemented to avoid allocations when zipping, and remains t
 - [ ] How good is [pyglossary](https://github.com/ilius/pyglossary) for wty/Jitendex? Test in goldendict
 - [ ] Stardict from mdict artifacts for Jitendex?
 - [ ] How hard is it to write some code that takes a Yomitan structured content thingy and returns html at home
+
+# License
+
+Copyright (C) 2026 MDictUtils Authors
+
+MDictUtils is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, version 3.
+
+MDictUtils is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MDictUtils. If not, see <https://www.gnu.org/licenses/>.
