@@ -77,13 +77,13 @@ internal static class Common
     // https://github.com/madler/zlib/blob/f9dd6009be3ed32415edf1e89d1bc38380ecb95d/adler32.c#L128
     // https://gist.github.com/AristurtleDev/316358b3f87fd995923b79350be342f5
     //
-    // header = (struct.pack(b"<L", compression_type) + 
-    //          struct.pack(b">L", zlib.adler32(data) & 0xffffffff)) #depending on python version, zlib.adler32 may return a signed number. 
-    private const uint BASE = 65521;
-    private const int NMAX = 5552;
-
+    // header = (struct.pack(b"<L", compression_type) +
+    //          struct.pack(b">L", zlib.adler32(data) & 0xffffffff)) #depending on python version, zlib.adler32 may return a signed number.
     public static uint Adler32(ReadOnlySpan<byte> buf)
     {
+        const uint BASE = 65521;
+        const int NMAX = 5552;
+
         uint adler = 1;
         uint sum2 = 0;
 

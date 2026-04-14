@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -31,6 +33,9 @@ internal class OffsetTableEntry
     // Weird stuff from get_record_null()
     public required string FilePath { get; init; }
 
+    public long MdxKeyBlockEntryLength => 8 + KeyNull.Length;
+    public long MdxRecordBlockEntryLength => RecordSize;
+
     public override string ToString()
     {
         static string BytesToString(ReadOnlySpan<byte> bytes)
@@ -58,29 +63,29 @@ internal abstract class MdxBlock
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     protected long _decompSize;
-    protected byte[] _compData;
+    protected ImmutableArray<byte> _compData;
     protected long _compSize;
-    protected string _version;
 
-    protected MdxBlock(List<OffsetTableEntry> offsetTable, int compressionType, string version)
+    protected MdxBlock(ReadOnlySpan<OffsetTableEntry> offsetTableEntries, int compressionType)
     {
-        if (compressionType != 2 || version != "2.0")
+        if (compressionType != 2)
             throw new NotSupportedException();
 
         // Console.WriteLine("[Debug] Calling MdxBlock...");
 
-        var decompDataSize = offsetTable.Sum(LenBlockEntry);
+        long longDecompDataSize = offsetTableEntries.Sum(BlockEntryLength);
+        int decompDataSize = Convert.ToInt32(longDecompDataSize);
         var decompData = _arrayPool.Rent(decompDataSize);
 
-        var maxBlockSize = offsetTable.Max(LenBlockEntry);
+        var maxBlockSize = offsetTableEntries.Max(BlockEntryLength);
         var blockBuffer = maxBlockSize < 256
-            ? stackalloc byte[maxBlockSize]
+            ? stackalloc byte[(int)maxBlockSize]
             : new byte[maxBlockSize];
 
         int totalSize = 0;
-        foreach (var entry in offsetTable)
+        foreach (var entry in offsetTableEntries)
         {
-            int blockSize = GetBlockEntry(entry, version, blockBuffer);
+            int blockSize = GetBlockEntry(entry, blockBuffer);
             // Console.WriteLine($"[Debug] BlockEntry ({blockEntry.Length} bytes): {BitConverter.ToString(blockEntry)}");
             var source = blockBuffer[..blockSize];
             var destination = decompData.AsSpan(start: totalSize, length: blockSize);
@@ -97,20 +102,18 @@ internal abstract class MdxBlock
         _compSize = _compData.Length;
         // Console.WriteLine($"[Debug] Compressed array length (_compSize): {_compSize}");
 
-        _version = version;
-
         _arrayPool.Return(decompData);
     }
 
-    public ReadOnlySpan<byte> BlockData => _compData;
+    public ReadOnlySpan<byte> BlockData => _compData.AsSpan();
 
     public abstract void GetIndexEntry(Span<byte> buffer);
-    protected abstract int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer);
-    public abstract int LenBlockEntry(OffsetTableEntry entry);
+    protected abstract int GetBlockEntry(OffsetTableEntry entry, Span<byte> buffer);
+    public abstract long BlockEntryLength(OffsetTableEntry entry);
     public abstract int IndexEntryLength { get; }
 
     // Called in MdxBlock init
-    public static byte[] MdxCompress(ReadOnlySpan<byte> data, int compressionType)
+    public static ImmutableArray<byte> MdxCompress(ReadOnlySpan<byte> data, int compressionType)
     {
         if (compressionType != 2)
             throw new NotSupportedException("Only compressionType=2 (Zlib) is supported in this version.");
@@ -134,7 +137,7 @@ internal abstract class MdxBlock
 
         var size = ZLibCompression.Compress(data, buffer);
 
-        byte[] compressed = [.. lend, .. adlerBytes, .. buffer.AsSpan(..size)];
+        ImmutableArray<byte> compressed = [.. lend, .. adlerBytes, .. buffer.AsSpan(..size)];
         _arrayPool.Return(buffer);
 
         // Console.WriteLine($"adler: {adler}");
@@ -144,19 +147,20 @@ internal abstract class MdxBlock
     }
 }
 
-internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressionType, string version)
-    : MdxBlock(offsetTable, compressionType, version)
+internal class MdxRecordBlock(ReadOnlySpan<OffsetTableEntry> offsetTable, int compressionType)
+    : MdxBlock(offsetTable, compressionType)
 {
     public override int IndexEntryLength => 16;
+
+    public override long BlockEntryLength(OffsetTableEntry entry)
+        => entry.MdxRecordBlockEntryLength;
 
     public override void GetIndexEntry(Span<byte> buffer)
     {
         // Console.WriteLine("Called GetIndexEntry on MDXRECORDBLOCK");
         // Console.WriteLine($"    compSize {_compSize}; decompsize {_decompSize}");
-        if (_version != "2.0")
-        {
-            throw new NotImplementedException();
-        }
+        // if (_version != "2.0")
+        //     throw new NotImplementedException();
 
         Debug.Assert(buffer.Length == IndexEntryLength);
 
@@ -167,7 +171,7 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
 
     // rg: get_record_null
     // We overwrite "return entry.RecordNull"
-    protected override int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer)
+    protected override int GetBlockEntry(OffsetTableEntry entry, Span<byte> buffer)
     {
         int size = ReadRecord(entry.FilePath, entry.RecordPos, (int)entry.RecordSize, entry.IsMdd, buffer);
         // entry.RecordNull = buffer[..size].ToArray();
@@ -205,11 +209,6 @@ internal class MdxRecordBlock(List<OffsetTableEntry> offsetTable, int compressio
             return size;
         }
     }
-
-    public override int LenBlockEntry(OffsetTableEntry entry)
-    {
-        return (int)entry.RecordSize; // TODO: fix cast
-    }
 }
 
 internal class MdxKeyBlock : MdxBlock
@@ -228,19 +227,17 @@ internal class MdxKeyBlock : MdxBlock
         return $"NumEntries={_numEntries}, FirstKey='{firstKeyStr}', LastKey='{lastKeyStr}'";
     }
 
-    public MdxKeyBlock(List<OffsetTableEntry> offsetTable, int compressionType, string version)
-        : base(offsetTable, compressionType, version)
+    public MdxKeyBlock(ReadOnlySpan<OffsetTableEntry> offsetTable, int compressionType)
+        : base(offsetTable, compressionType)
     {
-        _numEntries = offsetTable.Count;
-        Debug.Assert(version == "2.0");
-
+        _numEntries = offsetTable.Length;
         _firstKey = offsetTable[0].KeyNull;
         _lastKey = offsetTable[^1].KeyNull;
         _firstKeyLen = offsetTable[0].KeyLen;
         _lastKeyLen = offsetTable[^1].KeyLen;
     }
 
-    protected override int GetBlockEntry(OffsetTableEntry entry, string version, Span<byte> buffer)
+    protected override int GetBlockEntry(OffsetTableEntry entry, Span<byte> buffer)
     {
         Common.ToBigEndian((ulong)entry.Offset, buffer[..8]);
         entry.KeyNull.CopyTo(buffer[8..]);
@@ -248,17 +245,15 @@ internal class MdxKeyBlock : MdxBlock
     }
 
     // Approximate for version 2.0
-    public override int LenBlockEntry(OffsetTableEntry entry)
-    {
-        return 8 + entry.KeyNull.Length;
-    }
+    public override long BlockEntryLength(OffsetTableEntry entry)
+        => entry.MdxKeyBlockEntryLength;
 
     public override int IndexEntryLength
         => 8 + 2 + _firstKey.Length + 2 + _lastKey.Length + 8 + 8;
 
     public override void GetIndexEntry(Span<byte> buffer)
     {
-        Debug.Assert(_version == "2.0");
+        // Debug.Assert(_version == "2.0");
         Debug.Assert(buffer.Length == IndexEntryLength);
 
         var r = new SpanReader<byte>(buffer);
@@ -288,111 +283,124 @@ public sealed record MDictWriterOptions
 );
 #pragma warning restore format
 
+internal sealed record EncodingSettings(
+    Encoding InnerEncoding, // _python_encoding in the original
+    Encoding Encoding,
+    int EncodingLength);
+
+internal sealed record KeyBlockIndex(ImmutableArray<byte> CompressedBytes, long DecompSize)
+{
+    public int CompressedSize => CompressedBytes.Length;
+}
+
+internal sealed record RecordBlockIndex(ImmutableArray<byte> Bytes)
+{
+    public int Size => Bytes.Length;
+}
+
+internal sealed record OffsetTable(ImmutableArray<OffsetTableEntry> Entries)
+{
+    public long TotalRecordLength => Entries.Sum(static e => e.RecordSize);
+}
+
+internal sealed record MDictData
+(
+    MDictWriterOptions Metadata,
+    int EntryCount,
+    OffsetTable OffsetTable,
+    ReadOnlyCollection<MdxKeyBlock> KeyBlocks,
+    ReadOnlyCollection<MdxRecordBlock> RecordBlocks,
+    KeyBlockIndex KeyBlockIndex,
+    RecordBlockIndex RecordBlockIndex
+);
+
 public sealed class MDictWriter
 {
-    private readonly IMDictWriterLogger _logger;
-    private readonly int _numEntries;
-    private readonly string _title;
-    private readonly string _description;
-    private readonly int _blockSize;
-    private readonly int _compressionType;
-    private readonly string _version;
-    private readonly Encoding _encoding;
-    // _python_encoding in the original
-    private readonly Encoding _innerEncoding;
-    private readonly int _encodingLength;
-    private readonly bool _isMdd;
-
-    private List<OffsetTableEntry> _offsetTable = [];
-    private List<MdxKeyBlock> _keyBlocks = [];
-    private List<MdxRecordBlock> _recordBlocks = [];
-    private byte[] _keybIndex = [];
-    private long _keybIndexCompSize;
-    private long _keybIndexDecompSize;
-    private byte[] _recordbIndex = [];
-    private long _recordbIndexSize;
-    private long _totalRecordLen;
+    private readonly MDictData _data;
 
     public MDictWriter(List<MDictEntry> entries, MDictWriterOptions? opt = null)
     {
         opt ??= new();
 
-        _logger = opt.Logging
+        IMDictWriterLogger logger = opt.Logging
             ? new MDictWriterLogger()
             : new MDictWriterDummyLogger();
-
-        _numEntries = entries.Count;
-        _title = opt.Title;
-        _description = opt.Description;
-        _blockSize = opt.BlockSize;
-        _compressionType = opt.CompressionType;
-        _version = opt.Version;
-        _isMdd = opt.IsMdd;
-
-        // Set encoding
-        var encoding = opt.Encoding.ToLower();
-        Debug.Assert(encoding == "utf8");
-        if (opt.IsMdd || encoding == "utf16" || encoding == "utf-16")
-        {
-            _innerEncoding = Encoding.Unicode;
-            _encoding = Encoding.Unicode;
-            _encodingLength = 2;
-        }
-        else if (encoding == "utf8" || encoding == "utf-8")
-        {
-            _innerEncoding = Encoding.UTF8;
-            _encoding = Encoding.UTF8;
-            _encodingLength = 1;
-        }
-        else
-        {
-            throw new ArgumentException("Unknown encoding. Supported: utf8, utf16");
-        }
 
         if (opt.Version != "2.0")
         {
             throw new ArgumentException("Unknown version. Supported: 2.0");
         }
 
-        BuildOffsetTable(entries);
-        _logger.LogOffsetTable(_offsetTable, _totalRecordLen);
+        var offsetTable = BuildOffsetTable(entries, opt);
+        logger.LogOffsetTable(offsetTable);
 
-        _logger.LogBeginBuildingKeyBlocks();
-        _blockSize = opt.KeySize;
-        BuildKeyBlocks();
-        _logger.LogKeyBlocks(_blockSize, _keyBlocks);
+        logger.LogBeginBuildingKeyBlocks();
+        var keyBlocks = BuildKeyBlocks(offsetTable, opt).AsReadOnly();
+        logger.LogKeyBlocks(opt.KeySize, keyBlocks);
 
-        _blockSize = opt.BlockSize;
-        _logger.LogBlockSizeReset(_blockSize);
+        logger.LogBeginBuildingKeybIndex();
+        var keyBlockIndex = BuildKeyBlockIndex(keyBlocks, logger, opt.CompressionType);
+        logger.LogKeyBlockIndex(keyBlockIndex);
 
-        _logger.LogBeginBuildingKeybIndex();
-        BuildKeybIndex();
-        _logger.LogKeybIndex(_keybIndexDecompSize, _keybIndexCompSize);
+        var recordBlocks = BuildRecordBlocks(offsetTable, opt).AsReadOnly();
+        logger.LogRecordBlocks(recordBlocks);
 
-        BuildRecordBlocks();
-        _logger.LogRecordBlocks(_recordBlocks);
+        var recordBlockIndex = BuildRecordBlockIndex(recordBlocks);
+        logger.LogRecordIndex(recordBlockIndex);
 
-        BuildRecordbIndex();
-        _logger.LogRecordIndex(_recordbIndexSize);
+        _data = new(
+            opt,
+            entries.Count,
+            offsetTable,
+            keyBlocks,
+            recordBlocks,
+            keyBlockIndex,
+            recordBlockIndex);
 
-        _logger.LogInitializationComplete();
+        logger.LogInitializationComplete();
     }
 
-    private void BuildOffsetTable(List<MDictEntry> entries)
+    private EncodingSettings GetEncodingSettings(MDictWriterOptions opt)
     {
-        entries.Sort((a, b) => MDictKeyComparer.Compare(a.Key, b.Key, _isMdd));
+        var encoding = opt.Encoding.ToLower();
+        Debug.Assert(encoding == "utf8");
 
-        _offsetTable = [];
-        long offset = 0;
+        if (opt.IsMdd || encoding == "utf16" || encoding == "utf-16")
+        {
+            return new(
+                InnerEncoding: Encoding.Unicode,
+                Encoding: Encoding.Unicode,
+                EncodingLength: 2);
+        }
+        else if (encoding == "utf8" || encoding == "utf-8")
+        {
+            return new(
+                InnerEncoding: Encoding.UTF8,
+                Encoding: Encoding.UTF8,
+                EncodingLength: 1);
+        }
+        else
+        {
+            throw new ArgumentException("Unknown encoding. Supported: utf8, utf16");
+        }
+    }
+
+    private OffsetTable BuildOffsetTable(List<MDictEntry> entries, MDictWriterOptions opt)
+    {
+        entries.Sort((a, b) => MDictKeyComparer.Compare(a.Key, b.Key, opt.IsMdd));
+
+        var encodingSettings = GetEncodingSettings(opt);
+        var arrayBuilder = ImmutableArray.CreateBuilder<OffsetTableEntry>(entries.Count);
+        long currentOffset = 0;
 
         foreach (var item in entries)
         {
             // Console.WriteLine($"dict item: {item}");
-            var keyEnc = _innerEncoding.GetBytes(item.Key);
-            var keyNull = _innerEncoding.GetBytes($"{item.Key}\0");
-            var keyLen = keyEnc.Length / _encodingLength;
+            var keyEnc = encodingSettings.InnerEncoding.GetBytes(item.Key);
+            var keyNull = encodingSettings.InnerEncoding.GetBytes($"{item.Key}\0");
+            var keyLen = keyEnc.Length / encodingSettings.EncodingLength;
 
-            // var recordNull = _innerEncoding.GetBytes(item.Path);
+            // var recordNull = encodingSettings.InnerEncoding.GetBytes(item.Path);
 
             var tableEntry = new OffsetTableEntry
             {
@@ -400,15 +408,15 @@ public sealed class MDictWriter
                 KeyNull = keyNull,
                 KeyLen = keyLen,
                 // RecordNull = recordNull,
-                Offset = offset,
+                Offset = currentOffset,
                 RecordSize = item.Size,
                 RecordPos = item.Pos,
                 FilePath = item.Path,
-                IsMdd = _isMdd,
+                IsMdd = opt.IsMdd,
             };
-            _offsetTable.Add(tableEntry);
+            arrayBuilder.Add(tableEntry);
 
-            offset += item.Size;
+            currentOffset += item.Size;
         }
 
         // pretty print it here
@@ -446,21 +454,24 @@ public sealed class MDictWriter
         //     Console.WriteLine("----------------------");
         // }
 
-        _totalRecordLen = offset;
+        return new OffsetTable(arrayBuilder.MoveToImmutable());
     }
 
-    private List<T> SplitBlocks<T>(Func<List<OffsetTableEntry>, int, string, T> blockConstructor,
-                                   Func<OffsetTableEntry, long> lenFunc) where T : MdxBlock
+    private List<T> SplitBlocks<T>(Func<ReadOnlySpan<OffsetTableEntry>, int, T> blockConstructor,
+                                   Func<OffsetTableEntry, long> lenFunc,
+                                   OffsetTable offsetTable,
+                                   int blockSize,
+                                   int compressionType) where T : MdxBlock
     {
         var blocks = new List<T>();
         int thisBlockStart = 0;
         long curSize = 0;
 
-        for (int ind = 0; ind <= _offsetTable.Count; ind++)
+        for (int ind = 0; ind <= offsetTable.Entries.Length; ind++)
         {
-            var offsetTableEntry = (ind == _offsetTable.Count)
+            var offsetTableEntry = (ind == offsetTable.Entries.Length)
                 ? null
-                : _offsetTable[ind];
+                : offsetTable.Entries[ind];
 
             bool flush = false;
 
@@ -472,19 +483,19 @@ public sealed class MDictWriter
             {
                 flush = true;
             }
-            else if (curSize + lenFunc(offsetTableEntry) > _blockSize)
+            else if (curSize + lenFunc(offsetTableEntry) > blockSize)
             {
                 flush = true;
             }
 
             if (flush)
             {
-                var blockEntries = _offsetTable.GetRange(thisBlockStart, ind - thisBlockStart);
+                var blockEntries = offsetTable.Entries.AsSpan(thisBlockStart..ind);
                 // foreach (var entry in blockEntries)
                 // {
                 //     Console.WriteLine($"[split flush] {entry}");
                 // }
-                var block = blockConstructor(blockEntries, _compressionType, _version);
+                var block = blockConstructor(blockEntries, compressionType);
                 blocks.Add(block);
                 curSize = 0;
                 thisBlockStart = ind;
@@ -499,95 +510,91 @@ public sealed class MDictWriter
         return blocks;
     }
 
-    private void BuildKeyBlocks()
-        => _keyBlocks = SplitBlocks
+    private List<MdxKeyBlock> BuildKeyBlocks(OffsetTable offsetTable, MDictWriterOptions opt)
+        => SplitBlocks
         (
-            static (entries, comp, ver) => new MdxKeyBlock(entries, comp, ver),
-            static (entry) => 8 + entry.KeyNull.Length
+            static (entries, comp) => new MdxKeyBlock(entries, comp),
+            static (entry) => entry.MdxKeyBlockEntryLength,
+            offsetTable,
+            opt.KeySize,
+            opt.CompressionType
         );
 
-    private void BuildRecordBlocks()
-        => _recordBlocks = SplitBlocks
+    private List<MdxRecordBlock> BuildRecordBlocks(OffsetTable offsetTable, MDictWriterOptions opt)
+        => SplitBlocks
         (
-            static (entries, comp, ver) => new MdxRecordBlock(entries, comp, ver),
-            static (entry) => entry.RecordSize
+            static (entries, comp) => new MdxRecordBlock(entries, comp),
+            static (entry) => entry.MdxRecordBlockEntryLength,
+            offsetTable,
+            opt.BlockSize,
+            opt.CompressionType
         );
 
-    private void BuildKeybIndex()
+    private KeyBlockIndex BuildKeyBlockIndex(ReadOnlyCollection<MdxKeyBlock> keyBlocks, IMDictWriterLogger logger, int compressionType)
     {
-        Debug.Assert(_version == "2.0");
-
-        if (_keyBlocks is [])
-        {
-            _keybIndexDecompSize = 0;
-            _keybIndex = [];
-            _keybIndexCompSize = 0;
-            return;
-        }
+        if (keyBlocks is [])
+            return new([], 0);
 
         var arrayPool = ArrayPool<byte>.Shared;
 
-        int decompDataTotalSize = _keyBlocks.Sum(static b => b.IndexEntryLength);
-        var decompData = arrayPool.Rent(decompDataTotalSize);
+        int decompDataTotalSize = keyBlocks.Sum(static b => b.IndexEntryLength);
+        var decompArray = arrayPool.Rent(decompDataTotalSize);
+        var decompData = decompArray.AsSpan(..decompDataTotalSize);
 
-        int maxBlockSize = _keyBlocks.Max(static b => b.IndexEntryLength);
+        int maxBlockSize = keyBlocks.Max(static b => b.IndexEntryLength);
         var blockBuffer = maxBlockSize < 256
             ? stackalloc byte[maxBlockSize]
             : new byte[maxBlockSize];
 
         int bytesWritten = 0;
-        foreach (var block in _keyBlocks)
+        foreach (var block in keyBlocks)
         {
             var indexEntry = blockBuffer[..block.IndexEntryLength];
             block.GetIndexEntry(indexEntry);
-            _logger.LogIndexEntry(indexEntry);
+            logger.LogIndexEntry(indexEntry);
 
-            var destination = decompData.AsSpan().Slice(bytesWritten, indexEntry.Length);
+            var destination = decompData.Slice(bytesWritten, indexEntry.Length);
             indexEntry.CopyTo(destination);
             bytesWritten += indexEntry.Length;
         }
-
         Debug.Assert(bytesWritten == decompDataTotalSize);
 
-        _keybIndexDecompSize = bytesWritten;
-        _keybIndex = MdxBlock.MdxCompress(decompData.AsSpan(..bytesWritten), _compressionType);
-        _keybIndexCompSize = _keybIndex.Length;
+        var compressedBytes = MdxBlock.MdxCompress(decompData, compressionType);
 
-        arrayPool.Return(decompData);
+        KeyBlockIndex index = new(
+            CompressedBytes: compressedBytes,
+            DecompSize: bytesWritten);
+
+        arrayPool.Return(decompArray);
+
+        return index;
     }
 
-    private void BuildRecordbIndex()
+    private RecordBlockIndex BuildRecordBlockIndex(ReadOnlyCollection<MdxRecordBlock> recordBlocks)
     {
-        if (_recordBlocks is [])
-        {
-            _recordbIndex = [];
-            _recordbIndexSize = 0;
-            return;
-        }
+        if (recordBlocks is [])
+            return new([]);
 
-        int indexSize = _recordBlocks.Sum(static b => b.IndexEntryLength);
-        var indexData = new byte[indexSize];
+        int indexSize = recordBlocks.Sum(static b => b.IndexEntryLength);
+        var indexBuilder = ImmutableArray.CreateBuilder<byte>(indexSize);
 
-        int maxBlockSize = _recordBlocks.Max(static b => b.IndexEntryLength);
+        int maxBlockSize = recordBlocks.Max(static b => b.IndexEntryLength);
         var blockBuffer = maxBlockSize < 256
             ? stackalloc byte[maxBlockSize]
             : new byte[maxBlockSize];
 
         int bytesWritten = 0;
-        foreach (var block in _recordBlocks)
+        foreach (var block in recordBlocks)
         {
             var indexEntry = blockBuffer[..block.IndexEntryLength];
             block.GetIndexEntry(indexEntry);
 
-            var destination = indexData.AsSpan().Slice(bytesWritten, indexEntry.Length);
-            indexEntry.CopyTo(destination);
+            indexBuilder.AddRange(indexEntry);
             bytesWritten += indexEntry.Length;
         }
+        Debug.Assert(bytesWritten == indexSize);
 
-        Debug.Assert(bytesWritten == indexData.Length);
-
-        _recordbIndex = indexData;
-        _recordbIndexSize = indexData.Length;
+        return new(indexBuilder.MoveToImmutable());
     }
 
     public void Write(Stream outfile)
@@ -637,40 +644,40 @@ public sealed class MDictWriter
             sb.Append(' ');
         }
 
-        if (_isMdd)
+        if (_data.Metadata.IsMdd)
         {
-            append($"""  <Library_Data                                    """);
-            append($"""  GeneratedByEngineVersion="{_version}"            """);
-            append($"""  RequiredEngineVersion="{_version}"               """);
-            append($"""  Encrypted="{encrypted}"                          """);
-            append($"""  Encoding=""                                      """);
-            append($"""  Format=""                                        """);
-            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"  """);
-            append($"""  KeyCaseSensitive="No"                            """);
-            append($"""  Stripkey="No"                                    """);
-            append($"""  Description="{EscapeHtml(_description)}"         """);
-            append($"""  Title="{EscapeHtml(_title)}"                     """);
-            append($"""  RegisterBy="{registerByStr}"                     """);
+            append($"""  <Library_Data                                           """);
+            append($"""  GeneratedByEngineVersion="{_data.Metadata.Version}"     """);
+            append($"""  RequiredEngineVersion="{_data.Metadata.Version}"        """);
+            append($"""  Encrypted="{encrypted}"                                 """);
+            append($"""  Encoding=""                                             """);
+            append($"""  Format=""                                               """);
+            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"         """);
+            append($"""  KeyCaseSensitive="No"                                   """);
+            append($"""  Stripkey="No"                                           """);
+            append($"""  Description="{EscapeHtml(_data.Metadata.Description)}"  """);
+            append($"""  Title="{EscapeHtml(_data.Metadata.Title)}"              """);
+            append($"""  RegisterBy="{registerByStr}"                            """);
         }
         else
         {
-            append($"""  <Dictionary                                      """);
-            append($"""  GeneratedByEngineVersion="{_version}"            """);
-            append($"""  RequiredEngineVersion="{_version}"               """);
-            append($"""  Encrypted="{encrypted}"                          """);
-            append($"""  Encoding="{encoding}"                            """);
-            append($"""  Format="Html"                                    """);
-            append($"""  Stripkey="Yes"                                   """);
-            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"  """);
-            append($"""  Compact="Yes"                                    """);
-            append($"""  Compat="Yes"                                     """);
-            append($"""  KeyCaseSensitive="No"                            """);
-            append($"""  Description="{EscapeHtml(_description)}"         """);
-            append($"""  Title="{EscapeHtml(_title)}"                     """);
-            append($"""  DataSourceFormat="106"                           """);
-            append($"""  StyleSheet=""                                    """);
-            append($"""  Left2Right="Yes"                                 """);
-            append($"""  RegisterBy="{registerByStr}"                     """);
+            append($"""  <Dictionary                                             """);
+            append($"""  GeneratedByEngineVersion="{_data.Metadata.Version}"     """);
+            append($"""  RequiredEngineVersion="{_data.Metadata.Version}"        """);
+            append($"""  Encrypted="{encrypted}"                                 """);
+            append($"""  Encoding="{encoding}"                                   """);
+            append($"""  Format="Html"                                           """);
+            append($"""  Stripkey="Yes"                                          """);
+            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"         """);
+            append($"""  Compact="Yes"                                           """);
+            append($"""  Compat="Yes"                                            """);
+            append($"""  KeyCaseSensitive="No"                                   """);
+            append($"""  Description="{EscapeHtml(_data.Metadata.Description)}"  """);
+            append($"""  Title="{EscapeHtml(_data.Metadata.Title)}"              """);
+            append($"""  DataSourceFormat="106"                                  """);
+            append($"""  StyleSheet=""                                           """);
+            append($"""  Left2Right="Yes"                                        """);
+            append($"""  RegisterBy="{registerByStr}"                            """);
         }
         sb.Append("/>\r\n\0");
         return sb.ToString();
@@ -690,20 +697,21 @@ public sealed class MDictWriter
 
     private void WriteKeySection(Stream outfile)
     {
-        if (_version != "2.0")
+        if (_data.Metadata.Version != "2.0")
         {
             throw new NotImplementedException();
         }
 
-        long keyBlocksTotalValue = _keyBlocks.Sum(static b => b.BlockData.Length);
+        long keyBlocksTotalValue = _data.KeyBlocks.Sum(static b => b.BlockData.Length);
 
         Span<byte> preamble = stackalloc byte[5 * 8]; // Five 8-byte buffers
+        var r = new SpanReader<byte>(preamble) { ReadSize = 8 };
 
-        Common.ToBigEndian((ulong)_keyBlocks.Count, preamble[0..8]);
-        Common.ToBigEndian((ulong)_numEntries, preamble[8..16]);
-        Common.ToBigEndian((ulong)_keybIndexDecompSize, preamble[16..24]);
-        Common.ToBigEndian((ulong)_keybIndexCompSize, preamble[24..32]);
-        Common.ToBigEndian((ulong)keyBlocksTotalValue, preamble[32..40]);
+        Common.ToBigEndian((ulong)_data.KeyBlocks.Count, r.Read());
+        Common.ToBigEndian((ulong)_data.EntryCount, r.Read());
+        Common.ToBigEndian((ulong)_data.KeyBlockIndex.DecompSize, r.Read());
+        Common.ToBigEndian((ulong)_data.KeyBlockIndex.CompressedSize, r.Read());
+        Common.ToBigEndian((ulong)keyBlocksTotalValue, r.Read());
 
         uint checksumValue = Common.Adler32(preamble);
         Span<byte> checksum = stackalloc byte[4];
@@ -711,9 +719,9 @@ public sealed class MDictWriter
 
         outfile.Write(preamble);
         outfile.Write(checksum);
-        outfile.Write(_keybIndex.AsSpan());
+        outfile.Write(_data.KeyBlockIndex.CompressedBytes.AsSpan());
 
-        foreach (var block in _keyBlocks)
+        foreach (var block in _data.KeyBlocks)
         {
             outfile.Write(block.BlockData);
         }
@@ -721,24 +729,25 @@ public sealed class MDictWriter
 
     private void WriteRecordSection(Stream outfile)
     {
-        if (_version != "2.0")
+        if (_data.Metadata.Version != "2.0")
         {
             throw new NotImplementedException();
         }
 
-        long recordblocksTotal = _recordBlocks.Sum(static b => b.BlockData.Length);
+        long recordblocksTotal = _data.RecordBlocks.Sum(static b => b.BlockData.Length);
 
         Span<byte> preamble = stackalloc byte[4 * 8]; // Four 8-byte buffers
+        var r = new SpanReader<byte>(preamble) { ReadSize = 8 };
 
-        Common.ToBigEndian((ulong)_recordBlocks.Count, preamble[0..8]);
-        Common.ToBigEndian((ulong)_numEntries, preamble[8..16]);
-        Common.ToBigEndian((ulong)_recordbIndexSize, preamble[16..24]);
-        Common.ToBigEndian((ulong)recordblocksTotal, preamble[24..32]);
+        Common.ToBigEndian((ulong)_data.RecordBlocks.Count, r.Read());
+        Common.ToBigEndian((ulong)_data.EntryCount, r.Read());
+        Common.ToBigEndian((ulong)_data.RecordBlockIndex.Size, r.Read());
+        Common.ToBigEndian((ulong)recordblocksTotal, r.Read());
 
         outfile.Write(preamble);
-        outfile.Write(_recordbIndex.AsSpan());
+        outfile.Write(_data.RecordBlockIndex.Bytes.AsSpan());
 
-        foreach (var block in _recordBlocks)
+        foreach (var block in _data.RecordBlocks)
         {
             outfile.Write(block.BlockData);
         }
