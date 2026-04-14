@@ -42,8 +42,6 @@ static class Program
     // https://learn.microsoft.com/en-us/dotnet/standard/commandline/
     static int Main(string[] args)
     {
-        RootCommand rootCommand = new("MDictUtils CLI");
-
         Argument<string> mdictPath = new("mdx/mdd file")
         {
             Description = "Dictionary mdx/mdd file"
@@ -89,14 +87,17 @@ static class Program
             Description = "Show mdx/mdd meta information",
         };
 
-        rootCommand.Arguments.Add(mdictPath);
-        rootCommand.Options.Add(verboseFlag);
-        rootCommand.Options.Add(addPaths);
-        rootCommand.Options.Add(titlePath);
-        rootCommand.Options.Add(descriptionPath);
-        rootCommand.Options.Add(extractFlag);
-        rootCommand.Options.Add(extractDirPath);
-        rootCommand.Options.Add(metaFlag);
+        RootCommand rootCommand = new("MDictUtils CLI")
+        {
+            mdictPath,
+            verboseFlag,
+            addPaths,
+            titlePath,
+            descriptionPath,
+            extractFlag,
+            extractDirPath,
+            metaFlag
+        };
 
         rootCommand.SetAction(parseResult =>
         {
