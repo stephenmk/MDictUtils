@@ -1,5 +1,3 @@
-using System;
-
 namespace Lib;
 
 internal ref struct SpanReader<T>
