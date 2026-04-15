@@ -1,3 +1,7 @@
+using System.Collections.ObjectModel;
+using Lib.Build.Blocks;
+using Lib.Build.Index;
+using Lib.Build.Offset;
 using Lib.BuildModels;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +14,7 @@ internal sealed class MDictDataBuilder
     KeyBlockIndexBuilder keyBlockIndexBuilder,
     KeyBlocksBuilder keyBlocksBuilder,
     RecordBlockIndexBuilder recordBlockIndexBuilder,
-    RecordBlocksBuilder recordBlocksBuilder
+    IRecordBlocksBuilder recordBlocksBuilder
 )
     : IMDictDataBuilder
 {
@@ -26,20 +30,27 @@ internal sealed class MDictDataBuilder
         var keyBlockIndex = keyBlockIndexBuilder
             .Build(keyBlocks);
 
-        var recordBlocks = recordBlocksBuilder
-            .Build(offsetTable, m.BlockSize)
-            .AsReadOnly();
+        ReadOnlyCollection<RecordBlock> recordBlocks;
+        using (var fileStreams = new FileStreams())
+        {
+            recordBlocks = recordBlocksBuilder
+                .Build(offsetTable, m.BlockSize, fileStreams)
+                .AsReadOnly();
+        }
 
         var recordBlockIndex = recordBlockIndexBuilder
             .Build(recordBlocks);
 
-        logger.LogDebug("Initialization complete.");
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("Initialization complete.");
 
-        return new
+        return new MDictData
         (
-            Metadata: m,
+            Title: m.Title,
+            Description: m.Description,
+            Version: m.Version,
+            IsMdd: m.IsMdd,
             EntryCount: entries.Count,
-            OffsetTable: offsetTable,
             KeyBlocks: keyBlocks,
             RecordBlocks: recordBlocks,
             KeyBlockIndex: keyBlockIndex,

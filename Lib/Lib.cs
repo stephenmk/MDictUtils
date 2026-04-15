@@ -88,40 +88,40 @@ public sealed class MDictWriter
             sb.Append(' ');
         }
 
-        if (_data.Metadata.IsMdd)
+        if (_data.IsMdd)
         {
-            append($"""  <Library_Data                                           """);
-            append($"""  GeneratedByEngineVersion="{_data.Metadata.Version}"     """);
-            append($"""  RequiredEngineVersion="{_data.Metadata.Version}"        """);
-            append($"""  Encrypted="{encrypted}"                                 """);
-            append($"""  Encoding=""                                             """);
-            append($"""  Format=""                                               """);
-            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"         """);
-            append($"""  KeyCaseSensitive="No"                                   """);
-            append($"""  Stripkey="No"                                           """);
-            append($"""  Description="{EscapeHtml(_data.Metadata.Description)}"  """);
-            append($"""  Title="{EscapeHtml(_data.Metadata.Title)}"              """);
-            append($"""  RegisterBy="{registerByStr}"                            """);
+            append($"""  <Library_Data                                    """);
+            append($"""  GeneratedByEngineVersion="{_data.Version}"       """);
+            append($"""  RequiredEngineVersion="{_data.Version}"          """);
+            append($"""  Encrypted="{encrypted}"                          """);
+            append($"""  Encoding=""                                      """);
+            append($"""  Format=""                                        """);
+            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"  """);
+            append($"""  KeyCaseSensitive="No"                            """);
+            append($"""  Stripkey="No"                                    """);
+            append($"""  Description="{EscapeHtml(_data.Description)}"    """);
+            append($"""  Title="{EscapeHtml(_data.Title)}"                """);
+            append($"""  RegisterBy="{registerByStr}"                     """);
         }
         else
         {
-            append($"""  <Dictionary                                             """);
-            append($"""  GeneratedByEngineVersion="{_data.Metadata.Version}"     """);
-            append($"""  RequiredEngineVersion="{_data.Metadata.Version}"        """);
-            append($"""  Encrypted="{encrypted}"                                 """);
-            append($"""  Encoding="{encoding}"                                   """);
-            append($"""  Format="Html"                                           """);
-            append($"""  Stripkey="Yes"                                          """);
-            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"         """);
-            append($"""  Compact="Yes"                                           """);
-            append($"""  Compat="Yes"                                            """);
-            append($"""  KeyCaseSensitive="No"                                   """);
-            append($"""  Description="{EscapeHtml(_data.Metadata.Description)}"  """);
-            append($"""  Title="{EscapeHtml(_data.Metadata.Title)}"              """);
-            append($"""  DataSourceFormat="106"                                  """);
-            append($"""  StyleSheet=""                                           """);
-            append($"""  Left2Right="Yes"                                        """);
-            append($"""  RegisterBy="{registerByStr}"                            """);
+            append($"""  <Dictionary                                      """);
+            append($"""  GeneratedByEngineVersion="{_data.Version}"       """);
+            append($"""  RequiredEngineVersion="{_data.Version}"          """);
+            append($"""  Encrypted="{encrypted}"                          """);
+            append($"""  Encoding="{encoding}"                            """);
+            append($"""  Format="Html"                                    """);
+            append($"""  Stripkey="Yes"                                   """);
+            append($"""  CreationDate="{now.Year}-{now.Month}-{now.Day}"  """);
+            append($"""  Compact="Yes"                                    """);
+            append($"""  Compat="Yes"                                     """);
+            append($"""  KeyCaseSensitive="No"                            """);
+            append($"""  Description="{EscapeHtml(_data.Description)}"    """);
+            append($"""  Title="{EscapeHtml(_data.Title)}"                """);
+            append($"""  DataSourceFormat="106"                           """);
+            append($"""  StyleSheet=""                                    """);
+            append($"""  Left2Right="Yes"                                 """);
+            append($"""  RegisterBy="{registerByStr}"                     """);
         }
         sb.Append("/>\r\n\0");
         return sb.ToString();
@@ -147,7 +147,7 @@ public sealed class MDictWriter
         Common.ToBigEndian((ulong)_data.KeyBlocks.Count, r.Read());
         Common.ToBigEndian((ulong)_data.EntryCount, r.Read());
         Common.ToBigEndian((ulong)_data.KeyBlockIndex.DecompSize, r.Read());
-        Common.ToBigEndian((ulong)_data.KeyBlockIndex.CompressedSize, r.Read());
+        Common.ToBigEndian((ulong)_data.KeyBlockIndex.Size, r.Read());
         Common.ToBigEndian((ulong)_data.KeyBlocksSize, r.Read());
 
         uint checksumValue = Common.Adler32(preamble);
@@ -156,11 +156,11 @@ public sealed class MDictWriter
 
         outfile.Write(preamble);
         outfile.Write(checksum);
-        outfile.Write(_data.KeyBlockIndex.CompressedBytes.AsSpan());
+        outfile.Write(_data.KeyBlockIndex.Bytes.AsSpan());
 
         foreach (var block in _data.KeyBlocks)
         {
-            outfile.Write(block.BlockData.AsSpan());
+            outfile.Write(block.Bytes.AsSpan());
         }
     }
 
@@ -179,7 +179,7 @@ public sealed class MDictWriter
 
         foreach (var block in _data.RecordBlocks)
         {
-            outfile.Write(block.BlockData.AsSpan());
+            outfile.Write(block.Bytes.AsSpan());
         }
     }
 }

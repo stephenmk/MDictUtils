@@ -4,25 +4,27 @@ namespace Lib.BuildModels;
 
 internal sealed record MDictData
 (
-    MDictMetadata Metadata,
+    string Title,
+    string Description,
+    string Version,
+    bool IsMdd,
     int EntryCount,
-    OffsetTable OffsetTable,
-    ReadOnlyCollection<MdxKeyBlock> KeyBlocks,
-    ReadOnlyCollection<MdxRecordBlock> RecordBlocks,
-    KeyBlockIndex KeyBlockIndex,
-    RecordBlockIndex RecordBlockIndex
+    ReadOnlyCollection<KeyBlock> KeyBlocks,
+    ReadOnlyCollection<RecordBlock> RecordBlocks,
+    CompressedBlock KeyBlockIndex,
+    Block RecordBlockIndex
 )
 {
-    public int KeyBlocksSize => KeyBlocks.Sum(static b => b.BlockData.Length);
-    public int RecordBlocksSize => RecordBlocks.Sum(static b => b.BlockData.Length);
+    public int KeyBlocksSize => KeyBlocks.Sum(static b => b.Bytes.Length);
+    public int RecordBlocksSize => RecordBlocks.Sum(static b => b.Bytes.Length);
 }
 
-internal readonly record struct KeyBlockIndex(ImmutableArray<byte> CompressedBytes, long DecompSize)
+internal readonly record struct Block(ImmutableArray<byte> Bytes)
 {
-    public int CompressedSize => CompressedBytes.Length;
+    public int Size => Bytes.Length;
 }
 
-internal readonly record struct RecordBlockIndex(ImmutableArray<byte> Bytes)
+internal readonly record struct CompressedBlock(ImmutableArray<byte> Bytes, long DecompSize)
 {
     public int Size => Bytes.Length;
 }

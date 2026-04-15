@@ -4,7 +4,7 @@ using System.Diagnostics;
 using Lib.BuildModels;
 using Microsoft.Extensions.Logging;
 
-namespace Lib.Build;
+namespace Lib.Build.Index;
 
 internal partial class KeyBlockIndexBuilder
 (
@@ -14,7 +14,7 @@ internal partial class KeyBlockIndexBuilder
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public KeyBlockIndex Build(ReadOnlyCollection<MdxKeyBlock> keyBlocks)
+    public CompressedBlock Build(ReadOnlyCollection<KeyBlock> keyBlocks)
     {
         if (keyBlocks is [])
             return new([], 0);
@@ -33,7 +33,7 @@ internal partial class KeyBlockIndexBuilder
         foreach (var block in keyBlocks)
         {
             var indexEntry = blockBuffer[..block.IndexEntryLength];
-            block.GetIndexEntry(indexEntry);
+            block.CopyIndexEntryTo(indexEntry);
             LogIndexEntry(indexEntry);
             var destination = decompData.Slice(bytesWritten, indexEntry.Length);
             indexEntry.CopyTo(destination);
@@ -48,11 +48,11 @@ internal partial class KeyBlockIndexBuilder
         var compressedBytes = blockCompressor.Compress(decompData);
         _arrayPool.Return(decompArray);
 
-        KeyBlockIndex index = new(
-            CompressedBytes: compressedBytes,
+        CompressedBlock index = new(
+            Bytes: compressedBytes,
             DecompSize: bytesWritten);
 
-        LogIndexBuilt(index.DecompSize, index.CompressedSize);
+        LogIndexBuilt(index.DecompSize, index.Size);
 
         return index;
     }

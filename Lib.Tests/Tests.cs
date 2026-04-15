@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Lib.Build;
+using Lib.Build.Offset;
 using Xunit;
 
 namespace Lib.Tests;
@@ -76,11 +76,11 @@ public class MDictSorterTests
     public void TestMDictRegexStrip()
     {
         const string expected = "cc100";
-        char[] punctuationChars = [.. MDictKeyComparer.PunctuationChars, ' '];
+        char[] punctuationChars = [.. KeyComparer.PunctuationChars, ' '];
         foreach (var punctuation in punctuationChars)
         {
             var test = expected.Insert(3, punctuation.ToString());
-            var actual = MDictKeyComparer.RegexStrip.Replace(test, "");
+            var actual = KeyComparer.RegexStrip.Replace(test, "");
             Assert.Equal(expected, actual);
         }
     }
@@ -99,8 +99,8 @@ public class MDictSorterTests
         var expected = new List<(string Key, int ExpectedIndex)>(items);
         expected.Sort((a, b) => a.ExpectedIndex.CompareTo(b.ExpectedIndex));
 
-        var comparer = new MDictKeyComparer();
-        items.Sort((a, b) => comparer.Compare(a.Key, b.Key, isMdd: false));
+        var comparer = new MdxKeyComparer();
+        items.Sort((a, b) => comparer.Compare(a.Key, b.Key));
 
         for (int i = 0; i < items.Count; i++)
         {

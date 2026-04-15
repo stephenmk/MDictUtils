@@ -4,13 +4,13 @@ using System.Diagnostics;
 using Lib.BuildModels;
 using Microsoft.Extensions.Logging;
 
-namespace Lib.Build;
+namespace Lib.Build.Index;
 
 internal partial class RecordBlockIndexBuilder(ILogger<RecordBlockIndexBuilder> logger)
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public RecordBlockIndex Build(ReadOnlyCollection<MdxRecordBlock> recordBlocks)
+    public Block Build(ReadOnlyCollection<RecordBlock> recordBlocks)
     {
         if (recordBlocks is [])
             return new([]);
@@ -28,7 +28,7 @@ internal partial class RecordBlockIndexBuilder(ILogger<RecordBlockIndexBuilder> 
         foreach (var block in recordBlocks)
         {
             var indexEntry = blockBuffer[..block.IndexEntryLength];
-            block.GetIndexEntry(indexEntry);
+            block.CopyIndexEntryTo(indexEntry);
 
             indexBuilder.AddRange(indexEntry);
             bytesWritten += indexEntry.Length;
