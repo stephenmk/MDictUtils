@@ -35,14 +35,14 @@ The unsafe block is implemented to avoid allocations when zipping, and remains t
 
 ### TODO
 - [x] Update justfile with the cmd to build jitendex
-- [ ] Remove all non-version-2.0 branches because noise
+- [x] Remove some non-version-2.0 branches because noise
+- [ ] Doc generator? [this](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/xmldoc/) or [this](https://github.com/dotnet/docfx)
 - [ ] Rename things for clarity
 - [ ] Do decryption (?)
   - [x] Done for level=2
 - [ ] Release binaries (?)
 - [ ] Explore how to use as a library (writing a glossary from memory instead of disk)
 - [ ] How does one use perf in c#?
-- [ ] Doc generator? [this](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/xmldoc/) or [this](https://github.com/dotnet/docfx)
 - [ ] CI run on bigendian
 
 ### Others

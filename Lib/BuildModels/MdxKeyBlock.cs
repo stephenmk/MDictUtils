@@ -35,7 +35,6 @@ internal class MdxKeyBlock : MdxBlock
         return 8 + entry.KeyNull.Length;
     }
 
-    // Approximate for version 2.0
     public override long BlockEntryLength(OffsetTableEntry entry)
         => entry.MdxKeyBlockEntryLength;
 
@@ -44,7 +43,6 @@ internal class MdxKeyBlock : MdxBlock
 
     public override void GetIndexEntry(Span<byte> buffer)
     {
-        // Debug.Assert(_version == "2.0");
         Debug.Assert(buffer.Length == IndexEntryLength);
 
         var r = new SpanReader<byte>(buffer);

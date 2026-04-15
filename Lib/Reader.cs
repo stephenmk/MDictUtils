@@ -243,18 +243,10 @@ public partial class MDict
             }
         }
 
-        // version and number width
         _version = float.Parse(headerTag["GeneratedByEngineVersion"]);
-        if (_version < 2.0)
-        {
-            _numberWidth = 4;
-        }
-        else
-        {
-            _numberWidth = 8;
-            if (_version >= 3.0)
-                _encoding = Encoding.UTF8;
-        }
+        if (_version != 2.0)
+            throw new NotSupportedException("Unknown version. Supported: 2.0");
+        _numberWidth = 8; // version-dependent
 
         return headerTag;
     }
@@ -310,12 +302,11 @@ public partial class MDict
         return keyList;
     }
 
-    // _decode_key_block_info
     protected List<(long, long)> DecodeKeyBlockInfo(ReadOnlySpan<byte> keyBlockInfoCompressed, long decompSize)
     {
         ReadOnlySpan<byte> keyBlockInfo;
 
-        if (_version >= 2)
+        if (_version >= 2.0)
         {
             // SAFETY: check header bytes
             if (keyBlockInfoCompressed.Length < 4)
@@ -394,8 +385,8 @@ public partial class MDict
         List<(long, long)> keyBlockInfoList = [];
         int numEntries = 0;
         int i = 0;
-        int byteWidth = (_version >= 2) ? 2 : 1;
-        int textTerm = (_version >= 2) ? 1 : 0;
+        int byteWidth = (_version >= 2.0) ? 2 : 1;
+        int textTerm = (_version >= 2.0) ? 1 : 0;
 
         while (i < keyBlockInfo.Length)
         {

@@ -11,14 +11,7 @@ internal class MdxRecordBlock(ReadOnlySpan<OffsetTableEntry> offsetTable) : MdxB
 
     public override void GetIndexEntry(Span<byte> buffer)
     {
-        // Console.WriteLine("Called GetIndexEntry on MDXRECORDBLOCK");
-        // Console.WriteLine($"    compSize {_compSize}; decompsize {_decompSize}");
-        // if (_version != "2.0")
-        //     throw new NotImplementedException();
-
         Debug.Assert(buffer.Length == IndexEntryLength);
-
-        // Big-endian 64-bit values
         Common.ToBigEndian((ulong)_blockData.CompressedSize, buffer[..8]);
         Common.ToBigEndian((ulong)_blockData.DecompSize, buffer[8..16]);
     }
