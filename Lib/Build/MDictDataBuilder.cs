@@ -20,14 +20,14 @@ internal sealed class MDictDataBuilder
             .Build(entries, m);
 
         var keyBlocks = keyBlocksBuilder
-            .Build(offsetTable, m.KeySize, m.CompressionType)
+            .Build(offsetTable, m.KeySize)
             .AsReadOnly();
 
         var keyBlockIndex = keyBlockIndexBuilder
-            .Build(keyBlocks, m.CompressionType);
+            .Build(keyBlocks);
 
         var recordBlocks = recordBlocksBuilder
-            .Build(offsetTable, m.BlockSize, m.CompressionType)
+            .Build(offsetTable, m.BlockSize)
             .AsReadOnly();
 
         var recordBlockIndex = recordBlockIndexBuilder

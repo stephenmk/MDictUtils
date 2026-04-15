@@ -19,8 +19,7 @@ internal class MdxKeyBlock : MdxBlock
         return $"NumEntries={_numEntries}, FirstKey='{firstKeyStr}', LastKey='{lastKeyStr}'";
     }
 
-    public MdxKeyBlock(ReadOnlySpan<OffsetTableEntry> offsetTable, int compressionType)
-        : base(offsetTable, compressionType)
+    public MdxKeyBlock(ReadOnlySpan<OffsetTableEntry> offsetTable) : base(offsetTable)
     {
         _numEntries = offsetTable.Length;
         _firstKey = offsetTable[0].KeyNull;

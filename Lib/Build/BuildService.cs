@@ -9,25 +9,37 @@ internal interface IMDictDataBuilder
     public MDictData BuildData(List<MDictEntry> entries, MDictMetadata metadata);
 }
 
+internal interface IBlockCompressor
+{
+    ImmutableArray<byte> Compress(ReadOnlySpan<byte> data);
+}
+
 internal static class MDictDataBuilderProvider
 {
-    public static IMDictDataBuilder GetDataBuilder(bool logging)
-        => new ServiceCollection()
+    public static IMDictDataBuilder GetDataBuilder(MDictMetadata metadata, bool logging)
+    {
+        var s = new ServiceCollection();
 
         // Offset table
-        .AddTransient<OffsetTableBuilder>()
-        .AddTransient<MDictKeyComparer>()
+        s.AddTransient<OffsetTableBuilder>();
+        s.AddTransient<MDictKeyComparer>();
 
         // Key blocks
-        .AddTransient<KeyBlockIndexBuilder>()
-        .AddTransient<KeyBlocksBuilder>()
+        s.AddTransient<KeyBlockIndexBuilder>();
+        s.AddTransient<KeyBlocksBuilder>();
 
         // Record blocks
-        .AddTransient<RecordBlockIndexBuilder>()
-        .AddTransient<RecordBlocksBuilder>()
+        s.AddTransient<RecordBlockIndexBuilder>();
+        s.AddTransient<RecordBlocksBuilder>();
+
+        // Compression
+        if (metadata.CompressionType == ZLibBlockCompressor.CompressionType)
+            s.AddTransient<IBlockCompressor, ZLibBlockCompressor>();
+        else
+            throw new NotSupportedException($"Unsupported compression type `{metadata.CompressionType}`");
 
         // Logging
-        .AddLogging(builder =>
+        s.AddLogging(builder =>
         {
             if (logging) builder.SetMinimumLevel(LogLevel.Debug);
 
@@ -37,10 +49,12 @@ internal static class MDictDataBuilderProvider
                 options.SingleLine = false;
                 options.TimestampFormat = "HH:mm:ss ";
             });
-        })
+        });
 
         // Build and return the builder service.
-        .AddTransient<IMDictDataBuilder, MDictDataBuilder>()
-        .BuildServiceProvider()
-        .GetRequiredService<IMDictDataBuilder>();
+        s.AddTransient<IMDictDataBuilder, MDictDataBuilder>();
+
+        var provider = s.BuildServiceProvider();
+        return provider.GetRequiredService<IMDictDataBuilder>();
+    }
 }

@@ -2,8 +2,7 @@ using System.Diagnostics;
 
 namespace Lib.BuildModels;
 
-internal class MdxRecordBlock(ReadOnlySpan<OffsetTableEntry> offsetTable, int compressionType)
-    : MdxBlock(offsetTable, compressionType)
+internal class MdxRecordBlock(ReadOnlySpan<OffsetTableEntry> offsetTable) : MdxBlock(offsetTable)
 {
     public override int IndexEntryLength => 16;
 

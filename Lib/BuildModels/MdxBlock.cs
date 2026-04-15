@@ -1,4 +1,5 @@
 using System.Buffers;
+using Lib.Build;
 
 namespace Lib.BuildModels;
 
@@ -7,14 +8,12 @@ namespace Lib.BuildModels;
 /// </summary>
 internal abstract class MdxBlock
 {
+    private readonly static IBlockCompressor _blockCompressor = new ZLibBlockCompressor();
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     protected readonly MdxBlockData _blockData;
 
-    protected MdxBlock(ReadOnlySpan<OffsetTableEntry> offsetTableEntries, int compressionType)
+    protected MdxBlock(ReadOnlySpan<OffsetTableEntry> offsetTableEntries)
     {
-        if (compressionType != 2)
-            throw new NotSupportedException();
-
         // Console.WriteLine("[Debug] Calling MdxBlock...");
 
         int decompDataSize = Convert.ToInt32(offsetTableEntries.Sum(BlockEntryLength));
@@ -44,7 +43,7 @@ internal abstract class MdxBlock
         // Console.WriteLine($"[Debug] Decompressed array length (_decompSize): {_decompSize}");
         // Common.PrintPythonStyle(decompArray);
 
-        var compressedData = MdxCompress(decompData[..totalSize], compressionType);
+        var compressedData = _blockCompressor.Compress(decompData[..totalSize]);
 
         _blockData = new(compressedData, DecompSize: totalSize);
 
@@ -64,38 +63,4 @@ internal abstract class MdxBlock
     protected abstract int GetBlockEntry(OffsetTableEntry entry, Span<byte> buffer);
     public abstract long BlockEntryLength(OffsetTableEntry entry);
     public abstract int IndexEntryLength { get; }
-
-    // Called in MdxBlock init
-    public static ImmutableArray<byte> MdxCompress(ReadOnlySpan<byte> data, int compressionType)
-    {
-        if (compressionType != 2)
-            throw new NotSupportedException("Only compressionType=2 (Zlib) is supported in this version.");
-
-        // Compression type (little-endian)
-        Span<byte> compType = stackalloc byte[4];
-        Common.ToLittleEndian((uint)compressionType, compType); // <L in Python
-
-        // Adler32 checksum (big-endian)
-        uint adler = Common.Adler32(data);
-        Span<byte> adlerBytes = stackalloc byte[4];
-        Common.ToBigEndian(adler, adlerBytes); // Python uses >L
-
-        // byte[] header = [.. lend, .. adlerBytes];
-
-        // It's possible for compressed data to be larger than the uncompressed.
-        // See: https://zlib.net/zlib_tech.html
-        // "For the default settings, ... five bytes per 16 KB block (about 0.03%)"
-        // So we have to rent a size a little bit larger.
-        var buffer = _arrayPool.Rent(data.Length + (data.Length * 5 / 16_000) + 32);
-
-        var size = ZLibCompression.Compress(data, buffer);
-
-        ImmutableArray<byte> compressed = [.. compType, .. adlerBytes, .. buffer.AsSpan(..size)];
-        _arrayPool.Return(buffer);
-
-        // Console.WriteLine($"adler: {adler}");
-        // Console.WriteLine($"header: {BitConverter.ToString(header)}");
-
-        return compressed;
-    }
 }
