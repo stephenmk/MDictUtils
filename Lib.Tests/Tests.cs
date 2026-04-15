@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Xunit;
 using Lib.Build;
+using Xunit;
 
 namespace Lib.Tests;
 

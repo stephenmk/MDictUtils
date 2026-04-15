@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Lib.Build;
 using Lib.BuildModels;
 

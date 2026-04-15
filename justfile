@@ -10,6 +10,10 @@ bench:
 test *args:
   dotnet test Lib.Tests/ {{args}}
 
+# Format code
+fmt:
+  dotnet format --verbosity normal
+
 # Run the code against the fixtures
 run *args:
   dotnet build Cli -c Release
