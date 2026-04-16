@@ -175,6 +175,13 @@ public class HeaderTests
 // Pack and Unpack should be reversable
 public class DoUndoTests
 {
+    private static void AssertContentEqual(string expected, string actual)
+    {
+        string normalizedExpected = expected.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
+        string normalizedActual = actual.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
+        Assert.Equal(normalizedExpected, normalizedActual);
+    }
+
     public static TheoryData<string> TestContents => new()
         {
             """
@@ -204,36 +211,31 @@ public class DoUndoTests
 
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        string originalStubPath = Path.Combine(tempDir, "stub.txt");
-        string outMdxPath = Path.Combine(tempDir, "out1.mdx");
-        string extractedStubPath = Path.Combine(tempDir, "out1.mdx.txt");
+        string originalDictPath = Path.Combine(tempDir, "dict1.txt");
+        string outMdxPath = Path.Combine(tempDir, "out.mdx");
+        string extractedDictPath = Path.Combine(tempDir, "out.mdx.txt");
 
         try
         {
-            // Create stub.txt
-            File.WriteAllText(originalStubPath, testContent);
+            // Create dict1.txt
+            File.WriteAllText(originalDictPath, testContent);
 
-            // Pack stub.txt into out1.mdd
-            var packedEntries = MDictPacker.PackMdxTxt(originalStubPath);
+            // Pack it into out.mdx
+            var packedEntries = MDictPacker.PackMdxTxt(originalDictPath);
             var writer = new MDictWriter(packedEntries, new(IsMdd: isMdd));
             using (var outFile = File.Open(outMdxPath, FileMode.Create))
             {
                 writer.Write(outFile);
             }
 
-            File.Delete(originalStubPath);
-
-            // Unpack out1.mdd to tempDir and compare normalized
+            // Unpack out1.mdx to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);
-            Assert.True(File.Exists(extractedStubPath), "Extracted file should exist");
-            string extractedContent = File.ReadAllText(extractedStubPath);
-            string normalizedOriginal = testContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
-            string normalizedExtracted = extractedContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
-            Assert.Equal(normalizedOriginal, normalizedExtracted);
+            Assert.True(File.Exists(extractedDictPath), "Extracted file should exist");
+            string extractedContent = File.ReadAllText(extractedDictPath);
+            AssertContentEqual(testContent, extractedContent);
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
         }
@@ -247,16 +249,16 @@ public class DoUndoTests
 
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        string originalStubPath = Path.Combine(tempDir, "stub.txt");
-        string outMddPath = Path.Combine(tempDir, "out1.mdd");
-        string extractedStubPath = Path.Combine(tempDir, "stub.txt");
+        string originalStubPath = Path.Combine(tempDir, "dict1.txt");
+        string outMddPath = Path.Combine(tempDir, "out.mdd");
+        string extractedStubPath = Path.Combine(tempDir, "dict1.txt");
 
         try
         {
-            // Create stub.txt
+            // Create dict1.txt
             File.WriteAllText(originalStubPath, testContent);
 
-            // Pack stub.txt into out1.mdd
+            // Pack it into out.mdd
             var packedEntries = MDictPacker.PackMddFile(originalStubPath);
             var writer = new MDictWriter(packedEntries, new(IsMdd: isMdd));
             using (var outFile = File.Open(outMddPath, FileMode.Create))
@@ -264,19 +266,101 @@ public class DoUndoTests
                 writer.Write(outFile);
             }
 
-            File.Delete(originalStubPath);
-
             // Unpack out1.mdd to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMddPath, isMdd: isMdd);
             Assert.True(File.Exists(extractedStubPath), "Extracted file should exist");
             string extractedContent = File.ReadAllText(extractedStubPath);
-            string normalizedOriginal = testContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
-            string normalizedExtracted = extractedContent.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd('\n');
-            Assert.Equal(normalizedOriginal, normalizedExtracted);
+            AssertContentEqual(testContent, extractedContent);
         }
         finally
         {
-            // Cleanup
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+
+    public static TheoryData<string[]> MultipleFileTestContents =>
+        [
+            [
+                """
+                apple
+                A fruit that grows on trees.
+                </>
+                banana
+                A long yellow fruit.
+                </>
+                """,
+
+                """
+                cherry
+                A small round red fruit.
+                </>
+                """
+            ],
+
+            [
+                """
+                apple
+                A fruit that grows on trees.
+                </>
+                """,
+
+                """
+                banana
+                A long yellow fruit.
+                </>
+                """,
+
+                """
+                cherry
+                A small round red fruit.
+                </>
+                """
+            ]
+        ];
+
+    [Theory]
+    [MemberData(nameof(MultipleFileTestContents))]
+    public void DoUndo_PackAndUnpackMdxWithMultipleFiles_ProducesIdenticalFiles(string[] contents)
+    {
+        const bool isMdd = false;
+
+        // This should be the result since the fixture keys are sorted
+        string combinedOriginal = string.Join("\n", contents);
+
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        string sourceDir = Path.Combine(tempDir, "source");
+        Directory.CreateDirectory(sourceDir);
+        string outMdxPath = Path.Combine(tempDir, "out.mdx");
+        string extractPath = Path.Combine(tempDir, "out.mdx.txt");
+
+        try
+        {
+            // Create dictX.txt
+            for (int i = 0; i < contents.Length; i++)
+            {
+                string filePath = Path.Combine(sourceDir, $"dict{i + 1}.txt");
+                File.WriteAllText(filePath, contents[i]);
+            }
+
+            // Pack the entire source directory into out.mdx
+            var packedEntries = MDictPacker.PackMdxTxt(sourceDir);
+            var writer = new MDictWriter(packedEntries, new(IsMdd: isMdd));
+            using (var outFile = File.Open(outMdxPath, FileMode.Create))
+            {
+                writer.Write(outFile);
+            }
+
+            // Unpack out.mdx and compare normalized
+            MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);
+            Assert.True(File.Exists(extractPath), "Extracted file should exist");
+            string extractedContent = File.ReadAllText(extractPath);
+            AssertContentEqual(combinedOriginal, extractedContent);
+        }
+        finally
+        {
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
         }
