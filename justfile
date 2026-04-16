@@ -1,14 +1,14 @@
 # Run the (dev) command line
 cli *args:
-  dotnet run --project Cli -- {{args}}
+  dotnet run --project MDictUtils.Cli -- {{args}}
 
 # Run benchmarks
 bench:
-  dotnet run -c Release --project Lib.Benchmark
+  dotnet run -c Release --project MDictUtils.Benchmark
 
 # Run unit tests
 test *args:
-  dotnet test Lib.Tests/ {{args}}
+  dotnet test MDictUtils.Tests/ {{args}}
 
 # Format code
 fmt:
@@ -16,18 +16,18 @@ fmt:
 
 # Run the code against the fixtures
 run *args:
-  dotnet build Cli -c Release
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html {{args}}
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out2.mdd -a assets/stub.txt {{args}}
+  dotnet build MDictUtils.Cli -c Release
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll assets/out2.mdx -a assets/stub.txt -a assets/extra.txt --title assets/title.html --description assets/description.html {{args}}
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll assets/out2.mdd -a assets/stub.txt {{args}}
 
 oracle:
   mdict assets/out1.mdx -a assets/stub.txt --title assets/title.html -a assets/extra.txt --description assets/description.html
   mdict assets/out1.mdd -a assets/stub.txt
 
 do-undo:
-  dotnet build Cli -c Release
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out1.mdd -a assets/stub.txt && \
-  dotnet Cli/bin/Release/net*/Cli.dll assets/out1.mdd -x
+  dotnet build MDictUtils.Cli -c Release
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll assets/out1.mdd -a assets/stub.txt && \
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll assets/out1.mdd -x
   diff --strip-trailing-cr stub.txt assets/stub.txt
   rm stub.txt
 
@@ -50,27 +50,27 @@ final:
 # Otherwise nvim go to definition sends you to assembly and not source code
 sln:
   dotnet new sln -n MDictUtils --force
-  dotnet sln MDictUtils.slnx add Cli/Cli.csproj
-  dotnet sln MDictUtils.slnx add Lib/Lib.csproj
-  dotnet sln MDictUtils.slnx add Lib.Tests/Lib.Tests.csproj
-  dotnet sln MDictUtils.slnx add Lib.Benchmark/Lib.Benchmark.csproj
+  dotnet sln MDictUtils.slnx add MDictUtils.Cli/MDictUtils.Cli.csproj
+  dotnet sln MDictUtils.slnx add MDictUtils/MDictUtils.csproj
+  dotnet sln MDictUtils.slnx add MDictUtils.Tests/MDictUtils.Tests.csproj
+  dotnet sln MDictUtils.slnx add MDictUtils.Benchmark/MDictUtils.Benchmark.csproj
   dotnet build MDictUtils.slnx
 
 # Re-build jitendex from a downloaded, unzipped dict at .tmp/ folder
 # Download it at: https://jitendex.org/pages/downloads.html
 jitendex:
   mkdir -p build2/out
-  dotnet build Cli -c Release
+  dotnet build MDictUtils.Cli -c Release
   # Extract txt/media files into build2 folder
-  dotnet Cli/bin/Release/net*/Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdx -d build2
-  dotnet Cli/bin/Release/net*/Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdd -d build2/media
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdx -d build2
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdd -d build2/media
   # Re-build the dict from build2 folder
-  dotnet Cli/bin/Release/net*/Cli.dll \
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll \
       -a build2/jitendex.mdx.txt \
       --title build2/jitendex.mdx.title.html \
       --description build2/jitendex.mdx.description.html \
       build2/out/jitendex.mdx
-  dotnet Cli/bin/Release/net*/Cli.dll \
+  dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll \
       -a build2/media \
       --title build2/jitendex.mdx.title.html \
       --description build2/jitendex.mdx.description.html \

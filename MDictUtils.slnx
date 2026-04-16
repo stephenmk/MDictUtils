@@ -1,6 +1,6 @@
 <Solution>
-  <Project Path="Cli/Cli.csproj" />
-  <Project Path="Lib.Benchmark/Lib.Benchmark.csproj" />
-  <Project Path="Lib.Tests/Lib.Tests.csproj" />
-  <Project Path="Lib/Lib.csproj" />
+  <Project Path="MDictUtils/MDictUtils.csproj" />
+  <Project Path="MDictUtils.Cli/MDictUtils.Cli.csproj" />
+  <Project Path="MDictUtils.Tests/MDictUtils.Tests.csproj" />
+  <Project Path="MDictUtils.Benchmark/MDictUtils.Benchmark.csproj" />
 </Solution>
