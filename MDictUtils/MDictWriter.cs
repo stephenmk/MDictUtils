@@ -35,15 +35,16 @@ public sealed class MDictWriter
         if (metadata.Version != "2.0")
             throw new NotSupportedException("Unknown version. Supported: 2.0");
 
-        var builder = MDictDataBuilderProvider.GetDataBuilder(metadata, logging);
+        var builder = DataBuilderProvider.GetDataBuilder(metadata, logging);
         _data = builder.BuildData(entries, metadata);
     }
 
-    public void Write(Stream outfile)
+    public void Write(string filepath)
     {
-        WriteHeader(outfile);
-        WriteKeySection(outfile);
-        WriteRecordSection(outfile);
+        using var stream = new FileStream(filepath, FileMode.Create, FileAccess.Write, FileShare.None);
+        WriteHeader(stream);
+        WriteKeySection(stream);
+        WriteRecordSection(stream);
     }
 
     private void WriteHeader(Stream stream)

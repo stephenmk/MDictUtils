@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace MDictUtils.BuildModels;
 
-internal sealed class RecordBlock(CompressedBlock block) : MDictBlock(block)
+internal sealed class RecordBlock(int order, CompressedBlock block) : MDictBlock(order, block)
 {
     public override int IndexEntryLength => 16;
 

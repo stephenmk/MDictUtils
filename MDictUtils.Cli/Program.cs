@@ -224,9 +224,7 @@ static class Program
             {
                 Directory.CreateDirectory(directory);
             }
-            using var outFile = File.Open(args.MdictPath, FileMode.Create);
-
-            writer.Write(outFile);
+            writer.Write(args.MdictPath);
         }
         else if (args.ExtractFlag)
         {

@@ -33,11 +33,8 @@ public class Benchmarks
         Entries.AddRange(MDictPacker.PackMdxTxt(_txtFilePath));
 
         // Initialize MDX file.
-        using (FileStream fs = new(_mdxFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            var mdict = new MDictWriter(Entries, Metadata, logging: false);
-            mdict.Write(fs);
-        }
+        var mdict = new MDictWriter(Entries, Metadata, logging: false);
+        mdict.Write(_mdxFilePath);
     }
 
     [GlobalCleanup]
@@ -63,9 +60,8 @@ public class Benchmarks
     public void BenchmarkMdxWriting()
     {
         var tempFile = Path.Join(_tmpDirectoryPath, Guid.NewGuid().ToString());
-        using FileStream fs = new(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
         var mdict = new MDictWriter(Entries, Metadata, logging: false);
-        mdict.Write(fs);
+        mdict.Write(tempFile);
     }
 
     [Benchmark]

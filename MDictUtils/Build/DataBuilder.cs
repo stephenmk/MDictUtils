@@ -6,16 +6,16 @@ using Microsoft.Extensions.Logging;
 
 namespace MDictUtils.Build;
 
-internal sealed class MDictDataBuilder
+internal sealed class DataBuilder
 (
-    ILogger<MDictDataBuilder> logger,
+    ILogger<DataBuilder> logger,
     OffsetTableBuilder offsetTableBuilder,
     KeyBlockIndexBuilder keyBlockIndexBuilder,
     KeyBlocksBuilder keyBlocksBuilder,
     RecordBlockIndexBuilder recordBlockIndexBuilder,
     IRecordBlocksBuilder recordBlocksBuilder
 )
-    : IMDictDataBuilder
+    : IDataBuilder
 {
     public MDictData BuildData(List<MDictEntry> entries, MDictMetadata m)
     {

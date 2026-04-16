@@ -9,7 +9,7 @@ internal sealed class KeyBlock : MDictBlock
     private readonly OffsetEntryKey _firstKey;
     private readonly OffsetEntryKey _lastKey;
 
-    public KeyBlock(CompressedBlock block, ReadOnlySpan<OffsetTableEntry> offsetTable) : base(block)
+    public KeyBlock(int order, CompressedBlock block, ReadOnlySpan<OffsetTableEntry> offsetTable) : base(order, block)
     {
         _numEntries = offsetTable.Length;
         _firstKey = new(offsetTable[0]);
@@ -37,26 +37,27 @@ internal sealed class KeyBlock : MDictBlock
 
     private readonly record struct OffsetEntryKey
     {
-        public readonly int CharacterCount { get; }
-        public readonly ImmutableArray<byte> NullAppendedBytes { get; }
+        private readonly ushort _characterCount;
+        private readonly ImmutableArray<byte> _nullAppendedBytes;
 
         public OffsetEntryKey(OffsetTableEntry entry)
         {
-            CharacterCount = entry.KeyLen;
-            NullAppendedBytes = entry.KeyNull;
+            // Overflow error if the key contains more than 65,535 characters.
+            _characterCount = Convert.ToUInt16(entry.KeyLen);
+            _nullAppendedBytes = entry.KeyNull;
         }
 
         // Two bytes to store the character count.
-        public int Size => 2 + NullAppendedBytes.Length;
+        public int Size => 2 + _nullAppendedBytes.Length;
 
         public void CopyTo(ref SpanReader<byte> reader)
         {
-            Common.ToBigEndian((ushort)CharacterCount, reader.Read(2));
-            NullAppendedBytes.CopyTo(reader.Read(NullAppendedBytes.Length));
+            Common.ToBigEndian(_characterCount, reader.Read(2));
+            _nullAppendedBytes.CopyTo(reader.Read(_nullAppendedBytes.Length));
         }
 
         public override string ToString()
             => Encoding.UTF8
-                .GetString(NullAppendedBytes.AsSpan(..CharacterCount));
+                .GetString(_nullAppendedBytes.AsSpan(.._characterCount));
     }
 }

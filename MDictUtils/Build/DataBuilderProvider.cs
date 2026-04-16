@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace MDictUtils.Build;
 
-internal static class MDictDataBuilderProvider
+internal static class DataBuilderProvider
 {
-    public static IMDictDataBuilder GetDataBuilder(MDictMetadata metadata, bool logging)
+    public static IDataBuilder GetDataBuilder(MDictMetadata metadata, bool logging)
     {
         var s = new ServiceCollection();
 
@@ -51,9 +51,9 @@ internal static class MDictDataBuilderProvider
         });
 
         // Build and return the builder service.
-        s.AddTransient<IMDictDataBuilder, MDictDataBuilder>();
+        s.AddTransient<IDataBuilder, DataBuilder>();
 
         var provider = s.BuildServiceProvider();
-        return provider.GetRequiredService<IMDictDataBuilder>();
+        return provider.GetRequiredService<IDataBuilder>();
     }
 }

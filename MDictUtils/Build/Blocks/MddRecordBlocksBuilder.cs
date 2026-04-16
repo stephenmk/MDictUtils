@@ -11,16 +11,16 @@ internal sealed class MddRecordBlocksBuilder
 )
     : RecordBlocksBuilder(logger, blockCompressor)
 {
-    public override List<RecordBlock> Build(OffsetTable offsetTable, int blockSize)
-        => BuildBlocks(offsetTable, blockSize);
+    public override List<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
+        => BuildBlocks(offsetTable, desiredBlockSize);
 
     protected override long GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;
 
-    protected override RecordBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
+    protected override RecordBlock BlockConstructor(int order, ReadOnlySpan<OffsetTableEntry> entries)
     {
         var block = GetCompressedBlock(entries);
-        return new(block);
+        return new(order, block);
     }
 
     protected override int WriteBytes(OffsetTableEntry entry, Span<byte> buffer)

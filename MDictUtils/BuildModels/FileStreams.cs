@@ -1,55 +1,70 @@
-using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.IO.MemoryMappedFiles;
 
 namespace MDictUtils.BuildModels;
 
-internal sealed class FileStreams(int maxOpenStreams = 128) : IDisposable
+internal sealed class FileStreams(Dictionary<string, int> pathToTotalEntryCount) : IDisposable
 {
-    private readonly int _maxOpenStreams = maxOpenStreams;
-    private readonly Dictionary<string, MemoryMappedViewStream> _filepathToStream = [];
-    private readonly List<MemoryMappedFile> _files = [];
+    private readonly FrozenDictionary<string, int> _pathToTotalEntryCount = pathToTotalEntryCount.ToFrozenDictionary();
+    private readonly ConcurrentDictionary<string, int> _pathToEntryCount = [];
+    private readonly ConcurrentDictionary<string, MemoryMappedFile> _filepathToFile = [];
+    private readonly ConcurrentDictionary<(string Filepath, int ThreadId), MemoryMappedViewStream> _filepathIdToStream = [];
     private bool _isDisposed = false;
 
+    /// <summary>
+    /// Get a thread-safe, memory-mapped view stream for a file.
+    /// </summary>
     public MemoryMappedViewStream GetStream(string filepath)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        if (_filepathToStream.TryGetValue(filepath, out var stream))
-            return stream;
+        // Different threads cannot share the same view stream.
+        var key = (filepath, Environment.CurrentManagedThreadId);
 
-        return InitializeStream(filepath);
+        return _filepathIdToStream
+            .GetOrAdd(key, InitializeStream);
     }
 
-    private MemoryMappedViewStream InitializeStream(string filepath)
+    /// <summary>
+    /// Update the number of entries read from a file. Dispose of the file if all entries are read.
+    /// </summary>
+    public void UpdateEntryCount(string filepath)
     {
-        Debug.Assert(!_filepathToStream.ContainsKey(filepath));
-        Debug.Assert(_filepathToStream.Count == _files.Count);
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        var count = _pathToEntryCount.AddOrUpdate
+        (
+            key: filepath,
+            addValue: 1,
+            updateValueFactory: static (key, current) => current + 1
+        );
+        if (count == _pathToTotalEntryCount[filepath])
+        {
+            DisposeFile(filepath);
+        }
+    }
 
-        // Sanity check. Please don't use this many files.
-        if (_files.Count >= _maxOpenStreams)
-            DisposeStreams();
+    private MemoryMappedViewStream InitializeStream((string Filepath, int ThreadId) key)
+    {
+        var file = _filepathToFile.GetOrAdd(key.Filepath, InitializeFile);
+        return file.CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
+    }
 
-        var file = MemoryMappedFile
+    private MemoryMappedFile InitializeFile(string filepath)
+        => MemoryMappedFile
             .CreateFromFile(filepath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
 
-        var stream = file
-            .CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
-
-        _files.Add(file);
-        _filepathToStream[filepath] = stream;
-
-        return stream;
-    }
-
-    private void DisposeStreams()
+    private void DisposeFile(string filepath)
     {
-        foreach (var stream in _filepathToStream.Values)
-            stream.Dispose();
-        foreach (var file in _files)
-            file.Dispose();
-
-        _filepathToStream.Clear();
-        _files.Clear();
+        foreach (var (key, stream) in _filepathIdToStream)
+        {
+            if (filepath.Equals(key.Filepath, StringComparison.Ordinal))
+            {
+                stream.Dispose();
+            }
+        }
+        var file = _filepathToFile[filepath];
+        file.Dispose();
     }
 
     void IDisposable.Dispose()
@@ -57,7 +72,11 @@ internal sealed class FileStreams(int maxOpenStreams = 128) : IDisposable
         if (_isDisposed)
             return;
 
-        DisposeStreams();
+        foreach (var stream in _filepathIdToStream.Values)
+            stream.Dispose();
+        foreach (var file in _filepathToFile.Values)
+            file.Dispose();
+
         _isDisposed = true;
     }
 }

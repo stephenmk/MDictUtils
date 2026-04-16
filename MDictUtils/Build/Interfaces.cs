@@ -2,7 +2,7 @@ using MDictUtils.BuildModels;
 
 namespace MDictUtils.Build;
 
-internal interface IMDictDataBuilder
+internal interface IDataBuilder
 {
     public MDictData BuildData(List<MDictEntry> entries, MDictMetadata metadata);
 }
@@ -14,7 +14,7 @@ internal interface IBlockCompressor
 
 internal interface IRecordBlocksBuilder
 {
-    List<RecordBlock> Build(OffsetTable offsetTable, int blockSize);
+    List<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize);
 }
 
 internal interface IKeyComparer

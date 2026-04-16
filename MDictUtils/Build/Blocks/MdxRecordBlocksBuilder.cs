@@ -12,20 +12,21 @@ internal sealed class MdxRecordBlocksBuilder
 {
     private FileStreams? _fileStreams;
 
-    public override List<RecordBlock> Build(OffsetTable offsetTable, int blockSize)
+    public override List<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
     {
-        using var fileStreams = new FileStreams();
+        var pathToTotalEntryCount = offsetTable.GetFilePathToTotalEntryCount();
+        using var fileStreams = new FileStreams(pathToTotalEntryCount);
         _fileStreams = fileStreams;
-        return BuildBlocks(offsetTable, blockSize);
+        return BuildBlocks(offsetTable, desiredBlockSize);
     }
 
     protected override long GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;
 
-    protected override RecordBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
+    protected override RecordBlock BlockConstructor(int order, ReadOnlySpan<OffsetTableEntry> entries)
     {
         var block = GetCompressedBlock(entries);
-        return new(block);
+        return new(order, block);
     }
 
     protected override int WriteBytes(OffsetTableEntry entry, Span<byte> buffer)
@@ -40,6 +41,9 @@ internal sealed class MdxRecordBlocksBuilder
         // For MDX, read size-1 bytes and append null byte
         stream.ReadExactly(buffer[..(size - 1)]);
         buffer[size - 1] = 0; // null-terminate
+
+        _fileStreams.UpdateEntryCount(entry.FilePath);
+
         return size;
     }
 }

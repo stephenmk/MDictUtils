@@ -34,4 +34,16 @@ internal readonly record struct OffsetTable(ImmutableArray<OffsetTableEntry> Ent
     public int Length => Entries.Length;
     public long TotalRecordLength => Entries.Sum(static e => e.RecordSize);
     public ReadOnlySpan<OffsetTableEntry> AsSpan(Range range) => Entries.AsSpan(range);
+    public Dictionary<string, int> GetFilePathToTotalEntryCount()
+    {
+        var dict = new Dictionary<string, int>();
+        foreach (var entry in Entries)
+        {
+            dict[entry.FilePath] =
+                dict.TryGetValue(entry.FilePath, out var count)
+                    ? count + 1
+                    : 1;
+        }
+        return dict;
+    }
 }
