@@ -17,10 +17,10 @@ internal sealed class MddRecordBlocksBuilder
     protected override long GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;
 
-    protected override RecordBlock BlockConstructor(int order, ReadOnlySpan<OffsetTableEntry> entries)
+    protected override RecordBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
     {
         var block = GetCompressedBlock(entries);
-        return new(order, block);
+        return new(block);
     }
 
     protected override int WriteBytes(OffsetTableEntry entry, Span<byte> buffer)

@@ -318,6 +318,7 @@ public partial class MDict
                     """);
             }
 
+            // Expect compression type = 2 (ZLib) in little-endian bytes.
             if (keyBlockInfoCompressed is not [0x02, 0x00, 0x00, 0x00, ..])
             {
                 var actual = string.Join(

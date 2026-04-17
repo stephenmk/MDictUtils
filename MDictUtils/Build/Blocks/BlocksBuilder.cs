@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using MDictUtils.BuildModels;
 using MDictUtils.Extensions;
@@ -18,7 +17,7 @@ internal abstract partial class BlocksBuilder<T>
     private readonly static ArrayPool<Range> _rangePool = ArrayPool<Range>.Shared;
     private readonly static string _typeName = typeof(T).Name;
 
-    protected abstract T BlockConstructor(int index, ReadOnlySpan<OffsetTableEntry> entries);
+    protected abstract T BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries);
     protected abstract long GetByteCount(OffsetTableEntry entry);
     protected abstract int WriteBytes(OffsetTableEntry entry, Span<byte> buffer);
 
@@ -28,25 +27,17 @@ internal abstract partial class BlocksBuilder<T>
 
         var ranges = _rangePool.Rent(offsetTable.Length);
         var partitionCount = PartitionTable(offsetTable, desiredBlockSize, ranges);
-
-        var results = new ConcurrentBag<T>();
+        var blocksBuilder = new T[partitionCount];
 
         Parallel.For(0, partitionCount, i =>
         {
             var range = ranges[i];
             var entries = offsetTable.AsSpan(range);
-            var block = BlockConstructor(i, entries);
-            results.Add(block);
+            var block = BlockConstructor(entries);
+            blocksBuilder[i] = block;
         });
 
-        var blocksBuilder = ImmutableArray.CreateBuilder<T>(partitionCount);
-        foreach (var result in results)
-        {
-            blocksBuilder.Add(result);
-        }
-        blocksBuilder.Sort(static (x, y) => x.SortOrder.CompareTo(y.SortOrder));
-        var blocks = blocksBuilder.MoveToImmutable();
-
+        var blocks = ImmutableArray.Create(blocksBuilder);
         _rangePool.Return(ranges);
         LogBlocks(desiredBlockSize, blocks);
 
