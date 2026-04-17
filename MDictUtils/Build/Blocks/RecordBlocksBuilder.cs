@@ -10,5 +10,5 @@ internal abstract class RecordBlocksBuilder
 )
     : BlocksBuilder<RecordBlock>(logger, blockCompressor), IRecordBlocksBuilder
 {
-    public abstract List<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize);
+    public abstract ImmutableArray<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize);
 }

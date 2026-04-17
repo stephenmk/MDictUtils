@@ -11,7 +11,7 @@ internal sealed class MddRecordBlocksBuilder
 )
     : RecordBlocksBuilder(logger, blockCompressor)
 {
-    public override List<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
+    public override ImmutableArray<RecordBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
         => BuildBlocks(offsetTable, desiredBlockSize);
 
     protected override long GetByteCount(OffsetTableEntry entry)
@@ -43,7 +43,10 @@ internal sealed class MddRecordBlocksBuilder
                 break;
         }
 
-        // For MDD, apparently fewer bytes than the expected size might be read?
+        // Unless somebody changed the file since we last checked it,
+        // we should have read the expected amount of bytes.
+        Debug.Assert(totalRead == GetByteCount(entry));
+
         return totalRead;
     }
 }

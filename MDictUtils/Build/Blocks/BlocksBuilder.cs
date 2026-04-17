@@ -22,12 +22,11 @@ internal abstract partial class BlocksBuilder<T>
     protected abstract long GetByteCount(OffsetTableEntry entry);
     protected abstract int WriteBytes(OffsetTableEntry entry, Span<byte> buffer);
 
-    protected List<T> BuildBlocks(OffsetTable offsetTable, int desiredBlockSize)
+    protected ImmutableArray<T> BuildBlocks(OffsetTable offsetTable, int desiredBlockSize)
     {
         LogBeginBuilding(_typeName);
 
-        var rangePool = ArrayPool<Range>.Shared;
-        var ranges = rangePool.Rent(offsetTable.Length);
+        var ranges = _rangePool.Rent(offsetTable.Length);
         var partitionCount = PartitionTable(offsetTable, desiredBlockSize, ranges);
 
         var results = new ConcurrentBag<T>();
@@ -35,15 +34,20 @@ internal abstract partial class BlocksBuilder<T>
         Parallel.For(0, partitionCount, i =>
         {
             var range = ranges[i];
-            var blockEntries = offsetTable.AsSpan(range);
-            var block = BlockConstructor(i, blockEntries);
+            var entries = offsetTable.AsSpan(range);
+            var block = BlockConstructor(i, entries);
             results.Add(block);
         });
 
-        var blocks = results.ToList();
-        blocks.Sort(static (x, y) => x.SortOrder.CompareTo(y.SortOrder));
+        var blocksBuilder = ImmutableArray.CreateBuilder<T>(partitionCount);
+        foreach (var result in results)
+        {
+            blocksBuilder.Add(result);
+        }
+        blocksBuilder.Sort(static (x, y) => x.SortOrder.CompareTo(y.SortOrder));
+        var blocks = blocksBuilder.MoveToImmutable();
 
-        rangePool.Return(ranges);
+        _rangePool.Return(ranges);
         LogBlocks(desiredBlockSize, blocks);
 
         return blocks;
@@ -85,47 +89,38 @@ internal abstract partial class BlocksBuilder<T>
         return partitionCount;
     }
 
-    protected CompressedBlock GetCompressedBlock(ReadOnlySpan<OffsetTableEntry> offsetTableEntries)
+    protected CompressedBlock GetCompressedBlock(ReadOnlySpan<OffsetTableEntry> entries)
     {
-        int decompDataSize = Convert.ToInt32(offsetTableEntries.Sum(GetByteCount));
-        var decompData = _arrayPool.Rent(decompDataSize);
+        int totalSize = Convert.ToInt32(entries.Sum(GetByteCount));
+        var uncompressed = _arrayPool.Rent(totalSize);
 
-        var maxBlockSize = Convert.ToInt32(offsetTableEntries.Max(GetByteCount));
-        byte[]? blockArray = null;
-        var blockBuffer = maxBlockSize < 256
-            ? stackalloc byte[maxBlockSize]
-            : _arrayPool.Rent(maxBlockSize, ref blockArray);
-
-        int totalSize = 0;
-        foreach (var entry in offsetTableEntries)
+        int position = 0;
+        foreach (var entry in entries)
         {
-            int blockSize = WriteBytes(entry, blockBuffer);
-            var source = blockBuffer[..blockSize];
-            var destination = decompData.AsSpan(start: totalSize, length: blockSize);
-            source.CopyTo(destination);
-            totalSize += blockSize;
+            var buffer = uncompressed.AsSpan(start: position);
+            int size = WriteBytes(entry, buffer);
+            position += size;
         }
 
-        if (blockArray is not null)
-            _arrayPool.Return(blockArray);
+        var compressed = blockCompressor
+            .Compress(uncompressed.AsSpan(..position));
 
-        var compressedBytes = blockCompressor.Compress(decompData[..totalSize]);
+        _arrayPool.Return(uncompressed);
+        Debug.Assert(totalSize == position);
 
-        _arrayPool.Return(decompData);
-
-        return new(compressedBytes, DecompSize: totalSize);
+        return new(compressed, DecompSize: position);
     }
 
     [LoggerMessage(LogLevel.Debug, "Building blocks of type {Type}")]
     private partial void LogBeginBuilding(string type);
 
     [Conditional("DEBUG")]
-    private void LogBlocks(int desiredBlockSize, List<T> blocks)
+    private void LogBlocks(int desiredBlockSize, IList<T> blocks)
     {
         logger.LogDebug("Desired block size set to {BlockSize}", desiredBlockSize);
         logger.LogDebug("Built {Count} blocks.", blocks.Count);
 
-        if (blocks is not List<KeyBlock>)
+        if (blocks is not IList<KeyBlock>)
             return;
 
         foreach (var block in blocks)

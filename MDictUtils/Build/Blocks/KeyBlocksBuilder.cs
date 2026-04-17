@@ -10,7 +10,7 @@ internal sealed class KeyBlocksBuilder
 )
     : BlocksBuilder<KeyBlock>(logger, blockCompressor)
 {
-    public List<KeyBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
+    public ImmutableArray<KeyBlock> Build(OffsetTable offsetTable, int desiredBlockSize)
         => BuildBlocks(offsetTable, desiredBlockSize);
 
     protected override KeyBlock BlockConstructor(int order, ReadOnlySpan<OffsetTableEntry> entries)

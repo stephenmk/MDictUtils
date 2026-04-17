@@ -143,7 +143,7 @@ public sealed class MDictWriter
         Span<byte> preamble = stackalloc byte[5 * 8]; // Five 8-byte buffers
         var r = new SpanReader<byte>(preamble) { ReadSize = 8 };
 
-        Common.ToBigEndian((ulong)_data.KeyBlocks.Count, r.Read());
+        Common.ToBigEndian((ulong)_data.KeyBlocks.Length, r.Read());
         Common.ToBigEndian((ulong)_data.EntryCount, r.Read());
         Common.ToBigEndian((ulong)_data.KeyBlockIndex.DecompSize, r.Read());
         Common.ToBigEndian((ulong)_data.KeyBlockIndex.Size, r.Read());
@@ -168,7 +168,7 @@ public sealed class MDictWriter
         Span<byte> preamble = stackalloc byte[4 * 8]; // Four 8-byte buffers
         var r = new SpanReader<byte>(preamble) { ReadSize = 8 };
 
-        Common.ToBigEndian((ulong)_data.RecordBlocks.Count, r.Read());
+        Common.ToBigEndian((ulong)_data.RecordBlocks.Length, r.Read());
         Common.ToBigEndian((ulong)_data.EntryCount, r.Read());
         Common.ToBigEndian((ulong)_data.RecordBlockIndex.Size, r.Read());
         Common.ToBigEndian((ulong)_data.RecordBlocksSize, r.Read());

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.IO.MemoryMappedFiles;
+using ThreadKey = (string Filepath, int ThreadId);
 
 namespace MDictUtils.BuildModels;
 
@@ -9,7 +10,7 @@ internal sealed class FileStreams(Dictionary<string, int> pathToTotalEntryCount)
     private readonly FrozenDictionary<string, int> _pathToTotalEntryCount = pathToTotalEntryCount.ToFrozenDictionary();
     private readonly ConcurrentDictionary<string, int> _pathToEntryCount = [];
     private readonly ConcurrentDictionary<string, MemoryMappedFile> _filepathToFile = [];
-    private readonly ConcurrentDictionary<(string Filepath, int ThreadId), MemoryMappedViewStream> _filepathIdToStream = [];
+    private readonly ConcurrentDictionary<ThreadKey, MemoryMappedViewStream> _threadKeyToStream = [];
     private bool _isDisposed = false;
 
     /// <summary>
@@ -20,9 +21,9 @@ internal sealed class FileStreams(Dictionary<string, int> pathToTotalEntryCount)
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
         // Different threads cannot share the same view stream.
-        var key = (filepath, Environment.CurrentManagedThreadId);
+        ThreadKey key = (filepath, Environment.CurrentManagedThreadId);
 
-        return _filepathIdToStream
+        return _threadKeyToStream
             .GetOrAdd(key, InitializeStream);
     }
 
@@ -44,19 +45,19 @@ internal sealed class FileStreams(Dictionary<string, int> pathToTotalEntryCount)
         }
     }
 
-    private MemoryMappedViewStream InitializeStream((string Filepath, int ThreadId) key)
+    private MemoryMappedViewStream InitializeStream(ThreadKey key)
     {
         var file = _filepathToFile.GetOrAdd(key.Filepath, InitializeFile);
         return file.CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
     }
 
-    private MemoryMappedFile InitializeFile(string filepath)
+    private static MemoryMappedFile InitializeFile(string filepath)
         => MemoryMappedFile
             .CreateFromFile(filepath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
 
     private void DisposeFile(string filepath)
     {
-        foreach (var (key, stream) in _filepathIdToStream)
+        foreach (var (key, stream) in _threadKeyToStream)
         {
             if (filepath.Equals(key.Filepath, StringComparison.Ordinal))
             {
@@ -72,7 +73,7 @@ internal sealed class FileStreams(Dictionary<string, int> pathToTotalEntryCount)
         if (_isDisposed)
             return;
 
-        foreach (var stream in _filepathIdToStream.Values)
+        foreach (var stream in _threadKeyToStream.Values)
             stream.Dispose();
         foreach (var file in _filepathToFile.Values)
             file.Dispose();

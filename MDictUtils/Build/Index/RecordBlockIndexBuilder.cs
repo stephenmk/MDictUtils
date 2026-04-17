@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using MDictUtils.BuildModels;
 using MDictUtils.Extensions;
@@ -11,7 +10,7 @@ internal partial class RecordBlockIndexBuilder(ILogger<RecordBlockIndexBuilder> 
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public Block Build(ReadOnlyCollection<RecordBlock> recordBlocks)
+    public Block Build(ImmutableArray<RecordBlock> recordBlocks)
     {
         if (recordBlocks is [])
             return new([]);

@@ -23,15 +23,13 @@ internal sealed class DataBuilder
             .Build(entries, m);
 
         var keyBlocks = keyBlocksBuilder
-            .Build(offsetTable, m.KeySize)
-            .AsReadOnly();
+            .Build(offsetTable, m.KeySize);
 
         var keyBlockIndex = keyBlockIndexBuilder
             .Build(keyBlocks);
 
         var recordBlocks = recordBlocksBuilder
-            .Build(offsetTable, m.BlockSize)
-            .AsReadOnly();
+            .Build(offsetTable, m.BlockSize);
 
         var recordBlockIndex = recordBlockIndexBuilder
             .Build(recordBlocks);
@@ -46,10 +44,10 @@ internal sealed class DataBuilder
             m.Version,
             m.IsMdd,
             entries.Count,
-            keyBlocks,
-            recordBlocks,
             keyBlockIndex,
-            recordBlockIndex
+            keyBlocks,
+            recordBlockIndex,
+            recordBlocks
         );
     }
 }

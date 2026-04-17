@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using MDictUtils.BuildModels;
 using MDictUtils.Extensions;
@@ -15,44 +14,34 @@ internal partial class KeyBlockIndexBuilder
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public CompressedBlock Build(ReadOnlyCollection<KeyBlock> keyBlocks)
+    public CompressedBlock Build(ImmutableArray<KeyBlock> keyBlocks)
     {
         if (keyBlocks is [])
             return new([], 0);
 
-        int decompDataTotalSize = keyBlocks.Sum(static b => b.IndexEntryLength);
-        var decompArray = _arrayPool.Rent(decompDataTotalSize);
-        var decompData = decompArray.AsSpan(..decompDataTotalSize);
+        int totalSize = keyBlocks.Sum(static b => b.IndexEntryLength);
+        var uncompressed = _arrayPool.Rent(totalSize);
 
-        int maxBlockSize = keyBlocks.Max(static b => b.IndexEntryLength);
-        byte[]? blockArray = null;
-        var blockBuffer = maxBlockSize < 256
-            ? stackalloc byte[maxBlockSize]
-            : _arrayPool.Rent(maxBlockSize, ref blockArray);
-
-        int bytesWritten = 0;
+        int position = 0;
         foreach (var block in keyBlocks)
         {
-            var indexEntry = blockBuffer[..block.IndexEntryLength];
-            block.CopyIndexEntryTo(indexEntry);
-            LogIndexEntry(indexEntry);
-            var destination = decompData.Slice(bytesWritten, indexEntry.Length);
-            indexEntry.CopyTo(destination);
-            bytesWritten += indexEntry.Length;
+            var size = block.IndexEntryLength;
+            var buffer = uncompressed.AsSpan(position, size);
+            block.CopyIndexEntryTo(buffer);
+            LogIndexEntry(buffer);
+            position += size;
         }
 
-        if (blockArray is not null)
-            _arrayPool.Return(blockArray);
+        var compressed = blockCompressor
+            .Compress(uncompressed.AsSpan(..position));
 
-        Debug.Assert(bytesWritten == decompDataTotalSize);
-
-        var compressedBytes = blockCompressor.Compress(decompData);
-        _arrayPool.Return(decompArray);
+        _arrayPool.Return(uncompressed);
 
         CompressedBlock index = new(
-            Bytes: compressedBytes,
-            DecompSize: bytesWritten);
+            Bytes: compressed,
+            DecompSize: position);
 
+        Debug.Assert(position == totalSize);
         LogIndexBuilt(index.DecompSize, index.Size);
 
         return index;
