@@ -9,6 +9,9 @@ internal sealed class ZLibBlockCompressor : IBlockCompressor
 
     public ImmutableArray<byte> Compress(ReadOnlySpan<byte> data)
     {
+        /// <see cref="MDict.DecodeKeyBlockInfo"/>
+        /// Note that this is equivalent to [0x02, 0x00, 0x00, 0x00].
+        /// We could save a few CPU cycles by just hardcoding it here?
         Span<byte> compressionTypeBytes = stackalloc byte[4];
         Common.ToLittleEndian(CompressionType, compressionTypeBytes);
 

@@ -538,11 +538,11 @@ public partial class MDict
     }
 }
 
-public class MDD(string fname) : MDict(fname, Encoding.Unicode)
+public sealed class MDD(string fname) : MDict(fname, Encoding.Unicode)
 {
 }
 
-public class MDX(string fname) : MDict(fname, Encoding.UTF8)
+public sealed class MDX(string fname) : MDict(fname, Encoding.UTF8)
 {
     public override byte[] TreatRecordData(ReadOnlySpan<byte> data)
     {

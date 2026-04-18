@@ -135,6 +135,8 @@ public static class MDictPacker
             string relpath = source;
             foreach (var fpath in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
             {
+                /// TODO: An error will be thrown later if this length is equal to zero.
+                /// <see cref="Build.Blocks.MddRecordBlocksBuilder.WriteBytes"/>
                 long size = new FileInfo(fpath).Length;
                 string key = "\\" + Path.GetRelativePath(relpath, fpath);
                 if (Path.DirectorySeparatorChar != '\\')

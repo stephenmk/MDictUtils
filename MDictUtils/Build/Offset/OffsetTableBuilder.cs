@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MDictUtils.Build.Offset;
 
-internal partial class OffsetTableBuilder
+internal sealed partial class OffsetTableBuilder
 (
     ILogger<OffsetTableBuilder> logger,
     IKeyComparer keyComparer
@@ -29,9 +29,9 @@ internal partial class OffsetTableBuilder
             ? stackalloc byte[maxEncLength]
             : _arrayPool.Rent(maxEncLength, ref bufferArray);
 
-        foreach (var item in entries)
+        foreach (var entry in entries)
         {
-            var length = encoder.InnerEncoding.GetBytes($"{item.Key}\0", buffer);
+            var length = encoder.Encoding.GetBytes($"{entry.Key}\0", buffer);
             var keyNull = ImmutableArray.Create(buffer[..length]);
 
             // Subtract the encoding length because we appended '\0'
@@ -39,16 +39,16 @@ internal partial class OffsetTableBuilder
 
             var tableEntry = new OffsetTableEntry
             {
-                KeyNull = keyNull,
-                KeyLen = keyLen,
+                NullTerminatedKeyBytes = keyNull,
+                KeyCharacterCount = keyLen,
                 Offset = currentOffset,
-                RecordSize = item.Size,
-                RecordPos = item.Pos,
-                FilePath = item.Path,
+                RecordSize = entry.Size,
+                RecordPos = entry.Pos,
+                FilePath = entry.Path,
             };
             arrayBuilder.Add(tableEntry);
 
-            currentOffset += item.Size;
+            currentOffset += entry.Size;
         }
 
         if (bufferArray is not null)
@@ -60,10 +60,7 @@ internal partial class OffsetTableBuilder
         return new OffsetTable(tableEntries);
     }
 
-    private sealed record EncodingSettings(
-        Encoding InnerEncoding, // _python_encoding in the original
-        Encoding Encoding,
-        int EncodingLength);
+    private sealed record EncodingSettings(Encoding Encoding, int EncodingLength);
 
     private static EncodingSettings GetEncodingSettings(MDictMetadata m)
     {
@@ -72,17 +69,11 @@ internal partial class OffsetTableBuilder
 
         if (m.IsMdd || encoding == "utf16" || encoding == "utf-16")
         {
-            return new(
-                InnerEncoding: Encoding.Unicode,
-                Encoding: Encoding.Unicode,
-                EncodingLength: 2);
+            return new(Encoding.Unicode, EncodingLength: 2);
         }
         else if (encoding == "utf8" || encoding == "utf-8")
         {
-            return new(
-                InnerEncoding: Encoding.UTF8,
-                Encoding: Encoding.UTF8,
-                EncodingLength: 1);
+            return new(Encoding.UTF8, EncodingLength: 1);
         }
         else
         {
@@ -95,7 +86,7 @@ internal partial class OffsetTableBuilder
         int maxEncLength = 0;
         foreach (var entry in entries)
         {
-            int encLength = encoder.InnerEncoding.GetByteCount(entry.Key);
+            int encLength = encoder.Encoding.GetByteCount(entry.Key);
             maxEncLength = int.Max(maxEncLength, encLength);
         }
         maxEncLength += encoder.EncodingLength; // Because we'll be appending an extra '\0' character.

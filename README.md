@@ -15,16 +15,6 @@ pip install mdict-utils
 - Because the encoding/decoding depends on the current date, there will be some diff with the commited fixtures if you run this in the future (!). The only thing that matters is that `mdict` and this repo produce the same artifacts _on a given date_.
 - Because of differences between python zlib and the c# equivalent, the bytes of the compressed artifact may not exactly match (usually happens after a certain size). This should not matter, the sizes will be approximately equal, and they will decompress to the same data (but oracle test will fail if you compare the compressed artifacts!).
 
-### Unsafe
-
-Unsafe is diabled unless stated otherwise with the following command:
-
-```
-dotnet run -p:AllowUnsafeBlocks=true
-```
-
-The unsafe block is implemented to avoid allocations when zipping, and remains to be fully tested of its advantage.
-
 ### Links
 - [spec](https://mdict4j.readthedocs.io/zh-cn/latest/reference/fileformat.html)
 - A precursor of mdict-utils: [mdict-analysis](https://github.com/csarron/mdict-analysis)

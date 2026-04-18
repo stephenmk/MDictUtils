@@ -38,26 +38,26 @@ internal sealed class KeyBlock : MDictBlock
     private readonly record struct OffsetEntryKey
     {
         private readonly ushort _characterCount;
-        private readonly ImmutableArray<byte> _nullAppendedBytes;
+        private readonly ImmutableArray<byte> _nullTerminatedBytes;
 
         public OffsetEntryKey(OffsetTableEntry entry)
         {
             // Overflow error if the key contains more than 65,535 characters.
-            _characterCount = Convert.ToUInt16(entry.KeyLen);
-            _nullAppendedBytes = entry.KeyNull;
+            _characterCount = Convert.ToUInt16(entry.KeyCharacterCount);
+            _nullTerminatedBytes = entry.NullTerminatedKeyBytes;
         }
 
         // Two bytes to store the character count.
-        public int Size => 2 + _nullAppendedBytes.Length;
+        public int Size => 2 + _nullTerminatedBytes.Length;
 
         public void CopyTo(ref SpanReader<byte> reader)
         {
             Common.ToBigEndian(_characterCount, reader.Read(2));
-            _nullAppendedBytes.CopyTo(reader.Read(_nullAppendedBytes.Length));
+            _nullTerminatedBytes.CopyTo(reader.Read(_nullTerminatedBytes.Length));
         }
 
         public override string ToString()
             => Encoding.UTF8
-                .GetString(_nullAppendedBytes.AsSpan(.._characterCount));
+                .GetString(_nullTerminatedBytes.AsSpan(.._characterCount));
     }
 }

@@ -2,7 +2,7 @@ using BenchmarkDotNet.Running;
 
 namespace MDictUtils.Benchmark;
 
-public class Program
+public static class Program
 {
     public static void Main()
     {

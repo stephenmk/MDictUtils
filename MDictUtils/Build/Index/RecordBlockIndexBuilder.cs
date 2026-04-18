@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MDictUtils.Build.Index;
 
-internal partial class RecordBlockIndexBuilder(ILogger<RecordBlockIndexBuilder> logger)
+internal sealed partial class RecordBlockIndexBuilder(ILogger<RecordBlockIndexBuilder> logger)
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 

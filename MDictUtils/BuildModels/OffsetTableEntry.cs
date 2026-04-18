@@ -2,21 +2,21 @@ using System.Text;
 
 namespace MDictUtils.BuildModels;
 
-internal class OffsetTableEntry
+internal sealed class OffsetTableEntry
 {
     /// <summary>
-    /// Bytes of the null-appended entry key.
+    /// Bytes of the null-terminated entry key.
     /// Written immediately after this entry's "offset" value in the MDX/MDD file.
     /// For example, the key "apple" would have 6 bytes in UTF-8 (5 character bytes + 1 null character byte).
     /// In UTF-16, it would have twice as many (12) bytes.
     /// </summary>
-    public required ImmutableArray<byte> KeyNull { get; init; }
+    public required ImmutableArray<byte> NullTerminatedKeyBytes { get; init; }
 
     /// <summary>
     /// The number of encoded characters in the entry key (not including the appended null character).
     /// For example, the key "apple" contains five characters in both UTF-8 and UTF-16.
     /// </summary>
-    public required int KeyLen { get; init; }
+    public required int KeyCharacterCount { get; init; }
 
     /// <summary>
     /// The "offset" value of this entry.
@@ -42,7 +42,7 @@ internal class OffsetTableEntry
     /// <summary>
     /// Size of the uncompressed key data for this entry ("offset" value + null-appended key).
     /// </summary>
-    public int KeyBlockLength => 8 + KeyNull.Length;
+    public int KeyDataSize => 8 + NullTerminatedKeyBytes.Length;
 
     public override string ToString()
     {
@@ -51,11 +51,11 @@ internal class OffsetTableEntry
 
         var sb = new StringBuilder();
         sb.Append("OffsetTableEntry(");
-        sb.Append($"KeyLen={KeyLen}, ");
+        sb.Append($"KeyLen={KeyCharacterCount}, ");
         sb.Append($"Offset={Offset}, ");
         sb.Append($"RecordPos={RecordPos}, ");
         sb.Append($"RecordSize={RecordSize}, ");
-        sb.Append($"KeyNull='{BytesToString(KeyNull.AsSpan())}', ");
+        sb.Append($"KeyNull='{BytesToString(NullTerminatedKeyBytes.AsSpan())}', ");
         sb.Append(')');
         return sb.ToString();
     }

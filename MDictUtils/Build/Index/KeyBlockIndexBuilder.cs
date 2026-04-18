@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MDictUtils.Build.Index;
 
-internal partial class KeyBlockIndexBuilder
+internal sealed partial class KeyBlockIndexBuilder
 (
     ILogger<KeyBlockIndexBuilder> logger,
     IBlockCompressor blockCompressor
