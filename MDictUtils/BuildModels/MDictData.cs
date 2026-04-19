@@ -1,35 +1,13 @@
-using System.Diagnostics;
 using System.Text;
 
 namespace MDictUtils.BuildModels;
 
-internal sealed record DesiredKeyBlockSize(int Value);
-internal sealed record DesiredRecordBlockSize(int Value);
-
-internal sealed record EncodingSettings
+internal sealed record BuildOptions
 {
-    public Encoding Encoding { get; }
-    public int EncodingLength { get; }
-    public EncodingSettings(string encoding, bool isMdd)
-    {
-        encoding = encoding.ToLower();
-        Debug.Assert(encoding == "utf8");
-
-        if (isMdd || encoding == "utf16" || encoding == "utf-16")
-        {
-            Encoding = Encoding.Unicode;
-            EncodingLength = 2;
-        }
-        else if (encoding == "utf8" || encoding == "utf-8")
-        {
-            Encoding = Encoding.UTF8;
-            EncodingLength = 1;
-        }
-        else
-        {
-            throw new NotSupportedException("Unknown encoding. Supported: utf8, utf16");
-        }
-    }
+    public required int DesiredKeyBlockSize { get; init; }
+    public required int DesiredRecordBlockSize { get; init; }
+    public required Encoding KeyEncoding { get; init; }
+    public required int KeyEncodingLength { get; init; }
 }
 
 internal readonly record struct KeyData
@@ -63,7 +41,12 @@ internal readonly record struct CompressedBlock(ImmutableArray<byte> Bytes, long
     public int Size => Bytes.Length;
 }
 
-internal readonly record struct OffsetTable(ImmutableArray<OffsetTableEntry> Entries)
+internal readonly record struct OffsetTable
+(
+    ImmutableArray<OffsetTableEntry> Entries,
+    ImmutableArray<Range> KeyBlockRanges,
+    ImmutableArray<Range> RecordBlockRanges
+)
 {
     public int Length => Entries.Length;
     public ReadOnlySpan<OffsetTableEntry> AsSpan(Range range) => Entries.AsSpan(range);

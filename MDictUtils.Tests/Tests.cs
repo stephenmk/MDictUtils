@@ -24,7 +24,7 @@ public class MDictWriterTests
 
         try
         {
-            writer.Write(entries, outputPath, header);
+            writer.Write(header, entries, outputPath);
             Assert.True(File.Exists(outputPath));
             var fileInfo = new FileInfo(outputPath);
             Assert.True(fileInfo.Length > 0, "File should not be empty");
@@ -43,13 +43,13 @@ public class MDictWriterTests
         var header = new MdxHeader();
         var writer = MDictWriterProvider.GetWriter(options =>
         {
-            options.Encoding = "utf8";
+            options.KeyEncoding = MDictKeyEncodingType.Utf8;
         });
         var outputPath = Path.GetTempFileName();
 
         try
         {
-            writer.Write(entries, outputPath, header);
+            writer.Write(header, entries, outputPath);
             Assert.True(File.Exists(outputPath));
         }
         finally
@@ -221,7 +221,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(packedEntries, outMdxPath, header);
+            writer.Write(header, packedEntries, outMdxPath);
 
             // Unpack out1.mdx to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);
@@ -262,7 +262,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(packedEntries, outMddPath, header);
+            writer.Write(header, packedEntries, outMddPath);
 
             // Unpack out1.mdd to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMddPath, isMdd: isMdd);
@@ -352,7 +352,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(packedEntries, outMdxPath, header);
+            writer.Write(header, packedEntries, outMdxPath);
 
             // Unpack out.mdx and compare normalized
             MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);

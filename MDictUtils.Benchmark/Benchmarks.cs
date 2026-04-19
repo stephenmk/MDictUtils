@@ -34,7 +34,7 @@ public class Benchmarks
 
         // Initialize MDX file.
         var writer = MDictWriterProvider.GetWriter(static o => o.EnableLogging = false);
-        writer.Write(Entries, _mdxFilePath, Header);
+        writer.Write(Header, Entries, _mdxFilePath);
     }
 
     [GlobalCleanup]
@@ -62,7 +62,7 @@ public class Benchmarks
         var tempFile = Path.Join(_tmpDirectoryPath, Guid.NewGuid().ToString());
 
         var writer = MDictWriterProvider.GetWriter(static o => o.EnableLogging = false);
-        writer.Write(Entries, tempFile, Header);
+        writer.Write(Header, Entries, tempFile);
     }
 
     [Benchmark]

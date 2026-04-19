@@ -4,7 +4,6 @@ namespace MDictUtils.Build.Compression;
 
 internal sealed class ZLibBlockCompressor : IBlockCompressor
 {
-    public const uint CompressionType = 2;
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public ImmutableArray<byte> Compress(ReadOnlySpan<byte> data)

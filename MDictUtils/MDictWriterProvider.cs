@@ -1,3 +1,4 @@
+using System.Text;
 using MDictUtils.Build;
 using MDictUtils.Build.Blocks;
 using MDictUtils.Build.Compression;
@@ -7,22 +8,13 @@ using MDictUtils.BuildModels;
 using MDictUtils.Write;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using static MDictUtils.MDictKeyEncodingType;
 
 namespace MDictUtils;
 
 public interface IMDictWriter
 {
-    public void Write(List<MDictEntry> entries, string outputFile, MDictHeader header);
-}
-
-public sealed record MDictWriterOptions
-{
-    public uint CompressionType { get; set; } = 2;
-    public int DesiredKeyBlockSize { get; set; } = 32_768;
-    public int DesiredRecordBlockSize { get; set; } = 65_536;
-    public bool EnableLogging { get; set; } = true;
-    public string Encoding { get; set; } = "utf8";
-    public bool IsMdd { get; set; } = false;
+    public void Write(MDictHeader header, List<MDictEntry> entries, string outputFile);
 }
 
 public static class MDictWriterProvider
@@ -96,15 +88,22 @@ public static class MDictWriterProvider
             .AddBlockCompressor(options.CompressionType);
 
     private static IServiceCollection AddBuildOptions(this IServiceCollection services, MDictWriterOptions options)
-        => services
-            .AddTransient(_ => new DesiredKeyBlockSize(options.DesiredKeyBlockSize))
-            .AddTransient(_ => new DesiredRecordBlockSize(options.DesiredRecordBlockSize))
-            .AddTransient(_ => new EncodingSettings(options.Encoding, options.IsMdd));
+        => services.AddTransient(_ => new BuildOptions
+        {
+            DesiredKeyBlockSize = options.DesiredKeyBlockSize,
+            DesiredRecordBlockSize = options.DesiredRecordBlockSize,
+            KeyEncoding = options.IsMdd
+                ? Utf16.ToEncoding()
+                : options.KeyEncoding.ToEncoding(),
+            KeyEncodingLength = options.IsMdd
+                ? Utf16.ToEncodingLength()
+                : options.KeyEncoding.ToEncodingLength(),
+        });
 
-    private static IServiceCollection AddBlockCompressor(this IServiceCollection services, uint compressionType)
+    private static IServiceCollection AddBlockCompressor(this IServiceCollection services, MDictCompressionType compressionType)
         => compressionType switch
         {
-            ZLibBlockCompressor.CompressionType
+            MDictCompressionType.ZLib
                 => services.AddTransient<IBlockCompressor, ZLibBlockCompressor>(),
             _ // Default
                 => throw new NotSupportedException($"Unsupported compression type `{compressionType}`")

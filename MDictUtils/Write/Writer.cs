@@ -11,7 +11,7 @@ internal sealed class Writer
 )
     : IMDictWriter
 {
-    public void Write(List<MDictEntry> entries, string outputFile, MDictHeader header)
+    public void Write(MDictHeader header, List<MDictEntry> entries, string outputFile)
     {
         if (header.Version != "2.0")
             throw new NotSupportedException("Unknown version. Supported: 2.0");

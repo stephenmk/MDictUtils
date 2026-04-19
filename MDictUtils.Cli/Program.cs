@@ -228,7 +228,7 @@ static class Program
             {
                 Directory.CreateDirectory(directory);
             }
-            writer.Write(packed, args.MdictPath, header);
+            writer.Write(header, packed, args.MdictPath);
         }
         else if (args.ExtractFlag)
         {

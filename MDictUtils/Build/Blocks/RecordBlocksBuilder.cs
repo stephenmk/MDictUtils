@@ -15,6 +15,9 @@ internal abstract class RecordBlocksBuilder
     protected sealed override int GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;
 
+    protected sealed override ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable)
+        => offsetTable.RecordBlockRanges;
+
     protected sealed override RecordBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
     {
         var block = GetCompressedBlock(entries);

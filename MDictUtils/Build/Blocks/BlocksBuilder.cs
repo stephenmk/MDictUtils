@@ -14,19 +14,19 @@ internal abstract partial class BlocksBuilder<T>
     where T : MDictBlock
 {
     private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private readonly static ArrayPool<Range> _rangePool = ArrayPool<Range>.Shared;
     private readonly static string _typeName = typeof(T).Name;
 
     protected abstract T BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries);
     protected abstract int GetByteCount(OffsetTableEntry entry);
     protected abstract void WriteBytes(OffsetTableEntry entry, Span<byte> buffer);
+    protected abstract ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable);
 
-    protected ImmutableArray<T> BuildBlocks(OffsetTable offsetTable, int desiredBlockSize)
+    protected ImmutableArray<T> BuildBlocks(OffsetTable offsetTable)
     {
         LogBeginBuilding(_typeName);
 
-        var ranges = _rangePool.Rent(offsetTable.Length);
-        var blockCount = PartitionTable(offsetTable, desiredBlockSize, ranges);
+        var ranges = GetBlockRanges(offsetTable);
+        var blockCount = ranges.Length;
         var blocksBuilder = new T[blockCount];
 
         Parallel.For(0, blockCount, i =>
@@ -38,46 +38,9 @@ internal abstract partial class BlocksBuilder<T>
         });
 
         var blocks = ImmutableArray.Create(blocksBuilder);
-        _rangePool.Return(ranges);
-        LogBlocks(desiredBlockSize, blocks);
+        LogBlocks(blocks);
 
         return blocks;
-    }
-
-    private int PartitionTable(OffsetTable offsetTable, int desiredBlockSize, Span<Range> ranges)
-    {
-        int start = 0;
-        int blockCount = 0;
-        long blockSize = 0;
-
-        for (int end = 0; end <= offsetTable.Length; end++)
-        {
-            var offsetTableEntry = (end == offsetTable.Length)
-                ? null
-                : offsetTable.Entries[end];
-
-            bool flush;
-            if (end == 0)
-                flush = false;
-            else if (offsetTableEntry == null)
-                flush = true;
-            else if (blockSize + GetByteCount(offsetTableEntry) > desiredBlockSize)
-                flush = true;
-            else
-                flush = false;
-
-            if (flush)
-            {
-                ranges[blockCount++] = start..end;
-                blockSize = 0;
-                start = end;
-            }
-
-            if (offsetTableEntry is not null)
-                blockSize += GetByteCount(offsetTableEntry);
-        }
-
-        return blockCount;
     }
 
     protected CompressedBlock GetCompressedBlock(ReadOnlySpan<OffsetTableEntry> entries)
@@ -107,10 +70,15 @@ internal abstract partial class BlocksBuilder<T>
     private partial void LogBeginBuilding(string type);
 
     [Conditional("DEBUG")]
-    private void LogBlocks(int desiredBlockSize, IList<T> blocks)
+    private void LogBlocks(IList<T> blocks)
     {
-        logger.LogDebug("Desired block size set to {BlockSize}", desiredBlockSize);
+        // Average() throws an exception if the count is 0.
+        var avg = blocks.Count > 0
+            ? blocks.Average(static b => b.Bytes.Length)
+            : 0;
+
         logger.LogDebug("Built {Count} blocks.", blocks.Count);
+        logger.LogDebug("Average block size {Avg:N0} bytes", avg);
 
         if (blocks is not IList<KeyBlock>)
             return;
