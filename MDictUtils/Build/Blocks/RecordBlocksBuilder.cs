@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +11,7 @@ internal abstract class RecordBlocksBuilder
 )
     : BlocksBuilder<RecordBlock>(logger, blockCompressor), IRecordBlocksBuilder
 {
-    public abstract ImmutableArray<RecordBlock> Build(OffsetTable offsetTable);
+    public abstract Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel);
 
     protected sealed override int GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;

@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using Microsoft.Extensions.Logging;
 
@@ -12,12 +13,12 @@ internal sealed class MdxRecordBlocksBuilder
 {
     private FileStreams? _fileStreams;
 
-    public override ImmutableArray<RecordBlock> Build(OffsetTable offsetTable)
+    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel)
     {
         var pathToTotalEntryCount = offsetTable.GetFilePathToTotalEntryCount();
         using var fileStreams = new FileStreams(pathToTotalEntryCount);
         _fileStreams = fileStreams;
-        return BuildBlocks(offsetTable);
+        await BuildBlocksAsync(offsetTable, channel);
     }
 
     protected override void WriteBytes(OffsetTableEntry entry, Span<byte> buffer)

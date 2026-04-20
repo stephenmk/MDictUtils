@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using MDictUtils.Extensions;
 using Microsoft.Extensions.Logging;
@@ -13,34 +14,29 @@ internal abstract partial class BlocksBuilder<T>
 )
     where T : MDictBlock
 {
-    private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private readonly static string _typeName = typeof(T).Name;
+    private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private static readonly string _typeName = typeof(T).Name;
 
     protected abstract T BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries);
     protected abstract int GetByteCount(OffsetTableEntry entry);
     protected abstract void WriteBytes(OffsetTableEntry entry, Span<byte> buffer);
     protected abstract ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable);
 
-    protected ImmutableArray<T> BuildBlocks(OffsetTable offsetTable)
+    protected async Task BuildBlocksAsync(OffsetTable offsetTable, ChannelWriter<(int, T)> channel)
     {
         LogBeginBuilding(_typeName);
+        var blockRanges = GetBlockRanges(offsetTable);
+        var enumerator = Enumerable.Range(0, blockRanges.Length);
 
-        var ranges = GetBlockRanges(offsetTable);
-        var blockCount = ranges.Length;
-        var blocksBuilder = new T[blockCount];
-
-        Parallel.For(0, blockCount, i =>
+        await Parallel.ForEachAsync(enumerator, async (i, ct) =>
         {
-            var range = ranges[i];
-            var entries = offsetTable.AsSpan(range);
+            var blockRange = blockRanges[i];
+            var entries = offsetTable.AsSpan(blockRange);
             var block = BlockConstructor(entries);
-            blocksBuilder[i] = block;
+            await channel.WriteAsync((i, block), ct);
         });
 
-        var blocks = ImmutableArray.Create(blocksBuilder);
-        LogBlocks(blocks);
-
-        return blocks;
+        channel.Complete();
     }
 
     protected CompressedBlock GetCompressedBlock(ReadOnlySpan<OffsetTableEntry> entries)
@@ -68,24 +64,4 @@ internal abstract partial class BlocksBuilder<T>
 
     [LoggerMessage(LogLevel.Debug, "Building blocks of type {Type}")]
     private partial void LogBeginBuilding(string type);
-
-    [Conditional("DEBUG")]
-    private void LogBlocks(IList<T> blocks)
-    {
-        // Average() throws an exception if the count is 0.
-        var avg = blocks.Count > 0
-            ? blocks.Average(static b => b.Bytes.Length)
-            : 0;
-
-        logger.LogDebug("Built {Count} blocks.", blocks.Count);
-        logger.LogDebug("Average block size {Avg:N0} bytes", avg);
-
-        if (blocks is not IList<KeyBlock>)
-            return;
-
-        foreach (var block in blocks)
-        {
-            logger.LogDebug("KeyBlock: {Block}", block);
-        }
-    }
 }

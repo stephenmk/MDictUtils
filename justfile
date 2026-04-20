@@ -14,6 +14,9 @@ test *args:
 fmt:
   dotnet format --verbosity normal
 
+build:
+  dotnet build MDictUtils.Cli -c Release
+
 # Run the code against the fixtures
 run *args:
   dotnet build MDictUtils.Cli -c Release
@@ -60,7 +63,7 @@ sln:
 # Download it at: https://jitendex.org/pages/downloads.html
 jitendex:
   mkdir -p build2/out
-  dotnet build MDictUtils.Cli -c Release
+  # dotnet build MDictUtils.Cli -c Release
   # Extract txt/media files into build2 folder
   dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdx -d build2
   dotnet MDictUtils.Cli/bin/Release/net*/MDictUtils.Cli.dll -x .tmp/jitendex-mdict/jitendex/jitendex.mdd -d build2/media

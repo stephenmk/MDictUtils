@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using MDictUtils.Build.Offset;
 using Xunit;
 
@@ -10,7 +11,7 @@ namespace MDictUtils.Tests;
 public class MDictWriterTests
 {
     [Fact]
-    public void Write_CreatesValidFile()
+    public async Task Write_CreatesValidFile()
     {
         var entries = new List<MDictEntry>();
         var header = new MdxHeader
@@ -24,7 +25,7 @@ public class MDictWriterTests
 
         try
         {
-            writer.Write(header, entries, outputPath);
+            await writer.WriteAsync(header, entries, outputPath);
             Assert.True(File.Exists(outputPath));
             var fileInfo = new FileInfo(outputPath);
             Assert.True(fileInfo.Length > 0, "File should not be empty");
@@ -37,7 +38,7 @@ public class MDictWriterTests
     }
 
     [Fact]
-    public void Write_WithUTF8Encoding_CreatesFile()
+    public async Task Write_WithUTF8Encoding_CreatesFile()
     {
         var entries = new List<MDictEntry>();
         var header = new MdxHeader();
@@ -49,7 +50,7 @@ public class MDictWriterTests
 
         try
         {
-            writer.Write(header, entries, outputPath);
+            await writer.WriteAsync(header, entries, outputPath);
             Assert.True(File.Exists(outputPath));
         }
         finally
@@ -197,7 +198,7 @@ public class DoUndoTests
 
     [Theory]
     [MemberData(nameof(TestContents))]
-    public void DoUndo_PackAndUnpackMdx_ProducesIdenticalFile(string testContent)
+    public async Task DoUndo_PackAndUnpackMdx_ProducesIdenticalFile(string testContent)
     {
         const bool isMdd = false;
 
@@ -221,7 +222,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(header, packedEntries, outMdxPath);
+            await writer.WriteAsync(header, packedEntries, outMdxPath);
 
             // Unpack out1.mdx to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);
@@ -238,7 +239,7 @@ public class DoUndoTests
 
     [Theory]
     [MemberData(nameof(TestContents))]
-    public void DoUndo_PackAndUnpackMdd_ProducesIdenticalFile(string testContent)
+    public async Task DoUndo_PackAndUnpackMdd_ProducesIdenticalFile(string testContent)
     {
         const bool isMdd = true;
 
@@ -262,7 +263,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(header, packedEntries, outMddPath);
+            await writer.WriteAsync(header, packedEntries, outMddPath);
 
             // Unpack out1.mdd to tempDir and compare normalized
             MDictPacker.Unpack(tempDir, outMddPath, isMdd: isMdd);
@@ -320,7 +321,7 @@ public class DoUndoTests
 
     [Theory]
     [MemberData(nameof(MultipleFileTestContents))]
-    public void DoUndo_PackAndUnpackMdxWithMultipleFiles_ProducesIdenticalFiles(string[] contents)
+    public async Task DoUndo_PackAndUnpackMdxWithMultipleFiles_ProducesIdenticalFiles(string[] contents)
     {
         const bool isMdd = false;
 
@@ -352,7 +353,7 @@ public class DoUndoTests
             {
                 options.IsMdd = isMdd;
             });
-            writer.Write(header, packedEntries, outMdxPath);
+            await writer.WriteAsync(header, packedEntries, outMdxPath);
 
             // Unpack out.mdx and compare normalized
             MDictPacker.Unpack(tempDir, outMdxPath, isMdd: isMdd);

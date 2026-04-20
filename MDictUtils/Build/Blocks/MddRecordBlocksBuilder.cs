@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using Microsoft.Extensions.Logging;
 
@@ -11,8 +12,8 @@ internal sealed class MddRecordBlocksBuilder
 )
     : RecordBlocksBuilder(logger, blockCompressor)
 {
-    public override ImmutableArray<RecordBlock> Build(OffsetTable offsetTable)
-        => BuildBlocks(offsetTable);
+    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel)
+        => await BuildBlocksAsync(offsetTable, channel);
 
     protected override void WriteBytes(OffsetTableEntry entry, Span<byte> buffer)
     {

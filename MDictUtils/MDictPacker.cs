@@ -132,7 +132,7 @@ public static class MDictPacker
             if (Path.DirectorySeparatorChar != '\\')
                 key = key.Replace(Path.DirectorySeparatorChar, '\\');
 
-            entries.Add(new(key, Pos: 0, Path: source, size));
+            entries.Add(new(key, Path: source, Pos: 0, size));
         }
         else if (Directory.Exists(source))
         {
@@ -152,7 +152,7 @@ public static class MDictPacker
                 if (Path.DirectorySeparatorChar != '\\')
                     key = key.Replace(Path.DirectorySeparatorChar, '\\');
 
-                entries.Add(new(key, Pos: 0, fpath, size));
+                entries.Add(new(key, fpath, Pos: 0, size));
             }
         }
         else
@@ -216,7 +216,7 @@ public static class MDictPacker
                         ? Convert.ToInt32(longSize)
                         : throw new InvalidDataException($"File '{path}' contains a record that is too large (over {MaxRecordSize:N0} bytes)");
 
-                    entries.Add(new MDictEntry(key, pos, path, size));
+                    entries.Add(new MDictEntry(key, path, pos, size));
                     key = null;
                 }
                 else if (key == null)

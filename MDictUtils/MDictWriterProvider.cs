@@ -1,4 +1,3 @@
-using System.Text;
 using MDictUtils.Build;
 using MDictUtils.Build.Blocks;
 using MDictUtils.Build.Compression;
@@ -14,7 +13,7 @@ namespace MDictUtils;
 
 public interface IMDictWriter
 {
-    public void Write(MDictHeader header, List<MDictEntry> entries, string outputFile);
+    Task WriteAsync(MDictHeader header, List<MDictEntry> entries, string outputFile);
 }
 
 public static class MDictWriterProvider
@@ -70,7 +69,6 @@ public static class MDictWriterProvider
             .AddTransient<OffsetTableBuilder>()
             .AddTransient<KeyBlockIndexBuilder>()
             .AddTransient<KeyBlocksBuilder>()
-            .AddTransient<RecordBlockIndexBuilder>()
             .AddTransient<IRecordBlocksBuilder, MdxRecordBlocksBuilder>()
             .AddBuildOptions(options)
             .AddBlockCompressor(options.CompressionType);
@@ -82,7 +80,6 @@ public static class MDictWriterProvider
             .AddTransient<OffsetTableBuilder>()
             .AddTransient<KeyBlockIndexBuilder>()
             .AddTransient<KeyBlocksBuilder>()
-            .AddTransient<RecordBlockIndexBuilder>()
             .AddTransient<IRecordBlocksBuilder, MddRecordBlocksBuilder>()
             .AddBuildOptions(options)
             .AddBlockCompressor(options.CompressionType);

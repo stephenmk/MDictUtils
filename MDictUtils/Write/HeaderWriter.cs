@@ -4,12 +4,12 @@ namespace MDictUtils.Write;
 
 internal sealed class HeaderWriter
 {
-    public int Write(Stream stream, MDictHeader header)
+    public async Task WriteAsync(Stream stream, MDictHeader header)
     {
         var headerString = header.ToString();
 
         // Encode header to little-endian UTF-16
-        ReadOnlySpan<byte> headerBytes = Encoding.Unicode.GetBytes(headerString);
+        ReadOnlyMemory<byte> headerBytes = Encoding.Unicode.GetBytes(headerString);
 
         // Write header length (big-endian)
         Span<byte> lengthBytes = stackalloc byte[4];
@@ -17,17 +17,13 @@ internal sealed class HeaderWriter
         stream.Write(lengthBytes);
 
         // Write header string
-        stream.Write(headerBytes);
+        await stream.WriteAsync(headerBytes);
 
         // Write Adler32 checksum (little-endian)
-        uint checksum = Common.Adler32(headerBytes);
+        uint checksum = Common.Adler32(headerBytes.Span);
         Span<byte> checksumBytes = stackalloc byte[4];
         Common.ToLittleEndian(checksum, checksumBytes);
 
         stream.Write(checksumBytes);
-
-        return lengthBytes.Length
-            + headerBytes.Length
-            + checksumBytes.Length;
     }
 }

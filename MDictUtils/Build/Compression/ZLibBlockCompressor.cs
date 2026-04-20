@@ -4,7 +4,7 @@ namespace MDictUtils.Build.Compression;
 
 internal sealed class ZLibBlockCompressor : IBlockCompressor
 {
-    private readonly static ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public ImmutableArray<byte> Compress(ReadOnlySpan<byte> data)
     {

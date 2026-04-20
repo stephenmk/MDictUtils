@@ -13,7 +13,7 @@ internal sealed partial class OffsetTableBuilder
 )
 {
     private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private readonly static ArrayPool<Range> _rangePool = ArrayPool<Range>.Shared;
+    private static readonly ArrayPool<Range> _rangePool = ArrayPool<Range>.Shared;
 
     public OffsetTable Build(List<MDictEntry> entries)
     {
@@ -71,13 +71,13 @@ internal sealed partial class OffsetTableBuilder
 
     private int GetMaxKeySize(List<MDictEntry> entries)
     {
-        int maxKeySize = 0;
-        foreach (var entry in entries)
-        {
-            int keySize = options.KeyEncoding.GetByteCount(entry.Key);
-            maxKeySize = int.Max(maxKeySize, keySize);
-        }
-        maxKeySize += options.KeyEncodingLength; // Because we'll be appending an extra '\0' character.
+        int maxKeySize = entries
+            .DefaultIfEmpty(new("", "", 0, 0))
+            .Max(entry => options.KeyEncoding.GetByteCount(entry.Key));
+
+        // Add the length of one character because
+        // we'll be appending a '\0' character later.
+        maxKeySize += options.KeyEncodingLength;
         return maxKeySize;
     }
 

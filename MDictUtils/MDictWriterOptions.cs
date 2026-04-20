@@ -35,6 +35,9 @@ internal static class MDictKeyEncodingTypeExtensions
             _ => throw new NotSupportedException("Unknown encoding. Supported: utf8, utf16")
         };
 
+    /// <summary>
+    /// Gets the number of bytes per character in the encoding type.
+    /// </summary>
     public static int ToEncodingLength(this MDictKeyEncodingType type)
         => type switch
         {

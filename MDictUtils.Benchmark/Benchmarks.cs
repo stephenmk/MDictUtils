@@ -11,16 +11,18 @@ public class Benchmarks
 
     private readonly List<MDictEntry> Entries = [];
     private readonly MdxHeader Header = new();
+    private readonly IMDictWriter Writer = MDictWriterProvider
+        .GetWriter(static o => o.EnableLogging = false);
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         Directory.CreateDirectory(_tmpDirectoryPath);
 
         // Initialize TXT file.
-        using (FileStream fs = new(_txtFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        await using (FileStream fs = new(_txtFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
         {
-            using StreamWriter swriter = new(fs, new UTF8Encoding(false));
+            await using StreamWriter swriter = new(fs, new UTF8Encoding(false));
             foreach (var number in Enumerable.Range(100_000, 300_000))
             {
                 var key = $"{number:X}";
@@ -33,8 +35,7 @@ public class Benchmarks
         Entries.AddRange(MDictPacker.PackMdxTxt(_txtFilePath));
 
         // Initialize MDX file.
-        var writer = MDictWriterProvider.GetWriter(static o => o.EnableLogging = false);
-        writer.Write(Header, Entries, _mdxFilePath);
+        await Writer.WriteAsync(Header, Entries, _mdxFilePath);
     }
 
     [GlobalCleanup]
@@ -57,12 +58,11 @@ public class Benchmarks
     }
 
     [Benchmark]
-    public void BenchmarkMdxWriting()
+    public async Task BenchmarkMdxWritingAsync()
     {
         var tempFile = Path.Join(_tmpDirectoryPath, Guid.NewGuid().ToString());
 
-        var writer = MDictWriterProvider.GetWriter(static o => o.EnableLogging = false);
-        writer.Write(Header, Entries, tempFile);
+        await Writer.WriteAsync(Header, Entries, tempFile);
     }
 
     [Benchmark]
