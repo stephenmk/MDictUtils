@@ -21,10 +21,10 @@ internal sealed class DataBuilder
     public async Task<KeyData> BuildKeyDataAsync(OffsetTable offsetTable)
     {
         var keyBlocks = await keyBlocksBuilder.BuildAsync(offsetTable);
-        var keyBlockIndex = keyBlockIndexBuilder.Build(keyBlocks);
+        var keyBlockIndex = await keyBlockIndexBuilder.BuildAsync(keyBlocks);
         return new KeyData(offsetTable.Length, keyBlockIndex, keyBlocks);
     }
 
-    public Task BuildRecordBlocksAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> writer)
+    public Task BuildRecordBlocksAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> writer)
         => recordBlocksBuilder.BuildAsync(offsetTable, writer);
 }

@@ -143,7 +143,7 @@ public static class MDictPacker
                 var info = new FileInfo(fpath);
 
                 /// TODO: An error will be thrown later if this length is equal to zero.
-                /// <see cref="Build.Blocks.MddRecordBlocksBuilder.WriteBytes"/>
+                /// <see cref="Build.Blocks.MddRecordBlocksBuilder.WriteBytesAsync"/>
                 int size = info.Length < MaxRecordSize
                     ? Convert.ToInt32(info.Length)
                     : throw new InvalidDataException($"File '{info.FullName}' is too large (over {MaxRecordSize:N0} bytes)");

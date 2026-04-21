@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using Microsoft.Extensions.Logging;
-using OrderedBlock = (int Order, MDictUtils.BuildModels.KeyBlock Block);
 
 namespace MDictUtils.Build.Blocks;
 
@@ -13,11 +12,11 @@ internal sealed class KeyBlocksBuilder
 )
     : BlocksBuilder<KeyBlock>(logger, blockCompressor)
 {
-    public async Task<ImmutableArray<KeyBlock>> BuildAsync(OffsetTable offsetTable)
+    public async Task<ReadOnlyMemory<KeyBlock>> BuildAsync(OffsetTable offsetTable)
     {
         var blockCount = offsetTable.KeyBlockRanges.Length;
         var blocks = new KeyBlock[blockCount];
-        var channel = Channel.CreateUnbounded<OrderedBlock>();
+        var channel = Channel.CreateUnbounded<KeyBlock>();
 
         var readTask = ReadKeyBlocksAsync(blocks, channel);
         var buildTask = BuildBlocksAsync(offsetTable, channel);
@@ -26,34 +25,34 @@ internal sealed class KeyBlocksBuilder
 
         LogBlocks(blocks);
 
-        return ImmutableArray.Create(blocks);
+        return blocks;
     }
 
-    private static async Task ReadKeyBlocksAsync(KeyBlock[] blocks, ChannelReader<OrderedBlock> channel)
+    private static async Task ReadKeyBlocksAsync(KeyBlock[] blocks, ChannelReader<KeyBlock> channel)
     {
-        await foreach (var (i, block) in channel.ReadAllAsync())
+        await foreach (var block in channel.ReadAllAsync())
         {
-            blocks[i] = block;
+            blocks[block.Id] = block;
         }
-    }
-
-    protected override KeyBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
-    {
-        var block = GetCompressedBlock(entries);
-        return new(block, entries);
     }
 
     protected override int GetByteCount(OffsetTableEntry entry)
         => entry.KeyDataSize;
 
-    protected override void WriteBytes(OffsetTableEntry entry, Span<byte> buffer)
-    {
-        Common.ToBigEndian((ulong)entry.Offset, buffer[..8]);
-        entry.NullTerminatedKeyBytes.CopyTo(buffer[8..]);
-    }
-
     protected override ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable)
         => offsetTable.KeyBlockRanges;
+
+    protected override async Task<KeyBlock> BlockConstructorAsync(int id, ReadOnlyMemory<OffsetTableEntry> entries)
+    {
+        var block = await GetCompressedBlockAsync(entries);
+        return new(id, block, entries.Span);
+    }
+
+    protected override async Task WriteBytesAsync(OffsetTableEntry entry, Memory<byte> buffer)
+    {
+        Common.ToBigEndian((ulong)entry.Offset, buffer.Span[..8]);
+        entry.NullTerminatedKeyBytes.CopyTo(buffer.Span[8..]);
+    }
 
     [Conditional("DEBUG")]
     private void LogBlocks(IList<KeyBlock> blocks)

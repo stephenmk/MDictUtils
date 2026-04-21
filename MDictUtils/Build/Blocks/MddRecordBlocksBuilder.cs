@@ -12,10 +12,10 @@ internal sealed class MddRecordBlocksBuilder
 )
     : RecordBlocksBuilder(logger, blockCompressor)
 {
-    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel)
+    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> channel)
         => await BuildBlocksAsync(offsetTable, channel);
 
-    protected override void WriteBytes(OffsetTableEntry entry, Span<byte> buffer)
+    protected override async Task WriteBytesAsync(OffsetTableEntry entry, Memory<byte> buffer)
     {
         Debug.Assert(entry.RecordPos == 0);
 
@@ -25,11 +25,11 @@ internal sealed class MddRecordBlocksBuilder
             throw new InvalidDataException("Size must be >= 1");
 
         // For MDD, each file is opened only once and read entirely.
-        using var fs = new FileStream(entry.FilePath, FileMode.Open, FileAccess.Read);
+        await using var fs = new FileStream(entry.FilePath, FileMode.Open, FileAccess.Read);
         fs.Seek(entry.RecordPos, SeekOrigin.Begin);
 
         // Unless somebody changed the file since we last checked it,
         // we should read exactly the expected amount of bytes.
-        fs.ReadExactly(buffer);
+        await fs.ReadExactlyAsync(buffer);
     }
 }

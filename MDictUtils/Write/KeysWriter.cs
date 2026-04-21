@@ -20,7 +20,7 @@ namespace MDictUtils.Write;
 /// </remarks>
 internal sealed class KeysWriter
 {
-    public void Write(Stream outfile, KeyData data)
+    public async Task WriteAsync(Stream outfile, KeyData data)
     {
         Span<byte> preamble = stackalloc byte[5 * 8]; // Five 8-byte buffers
         var r = new SpanReader<byte>(preamble) { ReadSize = 8 };
@@ -37,11 +37,15 @@ internal sealed class KeysWriter
 
         outfile.Write(preamble);
         outfile.Write(checksum);
-        outfile.Write(data.KeyBlockIndex.Bytes.AsSpan());
 
-        foreach (var block in data.KeyBlocks)
+        await outfile.WriteAsync(data.KeyBlockIndex.Bytes);
+        data.KeyBlockIndex.Dispose();
+
+        for (int i = 0; i < data.KeyBlocks.Length; i++)
         {
-            outfile.Write(block.Bytes.AsSpan());
+            var block = data.KeyBlocks.Span[i];
+            await outfile.WriteAsync(block.Bytes);
+            block.Dispose();
         }
     }
 }

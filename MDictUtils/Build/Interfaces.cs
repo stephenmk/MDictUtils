@@ -7,17 +7,17 @@ internal interface IDataBuilder
 {
     OffsetTable BuildOffsetTable(List<MDictEntry> entries);
     Task<KeyData> BuildKeyDataAsync(OffsetTable offsetTable);
-    Task BuildRecordBlocksAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> writer);
+    Task BuildRecordBlocksAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> writer);
 }
 
 internal interface IBlockCompressor
 {
-    ImmutableArray<byte> Compress(ReadOnlySpan<byte> data);
+    Task<CompressedBlock> CompressAsync(ReadOnlyMemory<byte> data);
 }
 
 internal interface IRecordBlocksBuilder
 {
-    Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> writer);
+    Task BuildAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> writer);
 }
 
 internal interface IKeyComparer

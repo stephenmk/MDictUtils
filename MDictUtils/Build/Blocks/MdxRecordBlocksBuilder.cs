@@ -13,7 +13,7 @@ internal sealed class MdxRecordBlocksBuilder
 {
     private FileStreams? _fileStreams;
 
-    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel)
+    public override async Task BuildAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> channel)
     {
         var pathToTotalEntryCount = offsetTable.GetFilePathToTotalEntryCount();
         using var fileStreams = new FileStreams(pathToTotalEntryCount);
@@ -21,7 +21,7 @@ internal sealed class MdxRecordBlocksBuilder
         await BuildBlocksAsync(offsetTable, channel);
     }
 
-    protected override void WriteBytes(OffsetTableEntry entry, Span<byte> buffer)
+    protected override async Task WriteBytesAsync(OffsetTableEntry entry, Memory<byte> buffer)
     {
         int size = buffer.Length;
 
@@ -35,8 +35,8 @@ internal sealed class MdxRecordBlocksBuilder
         stream.Seek(entry.RecordPos, SeekOrigin.Begin);
 
         // For MDX, read size-1 bytes and append null byte
-        stream.ReadExactly(buffer[..(size - 1)]);
-        buffer[size - 1] = 0; // null-terminate
+        await stream.ReadExactlyAsync(buffer[..(size - 1)]);
+        buffer.Span[size - 1] = 0; // null-terminate
 
         _fileStreams.UpdateEntryCount(entry.FilePath);
     }

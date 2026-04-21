@@ -25,7 +25,7 @@ internal sealed class Writer
 
         // Process key data.
         var keyData = await dataBuilder.BuildKeyDataAsync(offsetTable);
-        keysWriter.Write(stream, keyData);
+        await keysWriter.WriteAsync(stream, keyData);
 
         // Concurrently read, compress, and write record data to the disk.
         // This is where the heavy lifting happens.
@@ -35,12 +35,12 @@ internal sealed class Writer
         await Task.WhenAll(buildTask, writeTask);
     }
 
-    private static Channel<(int, RecordBlock)> GetRecordBlockChannel()
+    private static Channel<RecordBlock> GetRecordBlockChannel()
     {
         var option = new BoundedChannelOptions(256)
         {
             FullMode = BoundedChannelFullMode.Wait
         };
-        return Channel.CreateBounded<(int, RecordBlock)>(option);
+        return Channel.CreateBounded<RecordBlock>(option);
     }
 }

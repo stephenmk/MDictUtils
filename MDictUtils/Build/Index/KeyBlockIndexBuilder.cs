@@ -12,34 +12,33 @@ internal sealed partial class KeyBlockIndexBuilder
     IBlockCompressor blockCompressor
 )
 {
-    private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private static readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
-    public CompressedBlock Build(ImmutableArray<KeyBlock> keyBlocks)
+    public async Task<CompressedBlock> BuildAsync(ReadOnlyMemory<KeyBlock> keyBlocks)
     {
-        if (keyBlocks is [])
-            return new([], 0);
+        if (keyBlocks.IsEmpty)
+        {
+            var compressed = _memoryPool.Rent(0);
+            return new(compressed, 0, 0);
+        }
 
-        int totalSize = keyBlocks.Sum(static b => b.IndexEntryLength);
-        var uncompressed = _arrayPool.Rent(totalSize);
+        int totalSize = keyBlocks.Span.Sum(static b => b.IndexEntryLength);
+        var uncompressed = _memoryPool.Rent(totalSize);
 
         int position = 0;
-        foreach (var block in keyBlocks)
+        foreach (var block in keyBlocks.Span)
         {
             var size = block.IndexEntryLength;
-            var buffer = uncompressed.AsSpan(position, size);
+            var buffer = uncompressed.Memory.Slice(position, size).Span;
             block.CopyIndexEntryTo(buffer);
             LogIndexEntry(buffer);
             position += size;
         }
 
-        var compressed = blockCompressor
-            .Compress(uncompressed.AsSpan(..position));
+        var index = await blockCompressor
+            .CompressAsync(uncompressed.Memory[..position]);
 
-        _arrayPool.Return(uncompressed);
-
-        CompressedBlock index = new(
-            Bytes: compressed,
-            DecompSize: position);
+        uncompressed.Dispose();
 
         Debug.Assert(position == totalSize);
         LogIndexBuilt(index.DecompSize, index.Size);

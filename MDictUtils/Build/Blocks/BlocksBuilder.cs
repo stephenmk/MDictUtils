@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Threading.Channels;
 using MDictUtils.BuildModels;
 using MDictUtils.Extensions;
@@ -14,52 +13,47 @@ internal abstract partial class BlocksBuilder<T>
 )
     where T : MDictBlock
 {
-    private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private static readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
     private static readonly string _typeName = typeof(T).Name;
 
-    protected abstract T BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries);
     protected abstract int GetByteCount(OffsetTableEntry entry);
-    protected abstract void WriteBytes(OffsetTableEntry entry, Span<byte> buffer);
     protected abstract ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable);
+    protected abstract Task<T> BlockConstructorAsync(int id, ReadOnlyMemory<OffsetTableEntry> entries);
+    protected abstract Task WriteBytesAsync(OffsetTableEntry entry, Memory<byte> buffer);
 
-    protected async Task BuildBlocksAsync(OffsetTable offsetTable, ChannelWriter<(int, T)> channel)
+    protected async Task BuildBlocksAsync(OffsetTable offsetTable, ChannelWriter<T> channel)
     {
         LogBeginBuilding(_typeName);
         var blockRanges = GetBlockRanges(offsetTable);
-        var enumerator = Enumerable.Range(0, blockRanges.Length);
 
-        await Parallel.ForEachAsync(enumerator, async (i, ct) =>
+        await Parallel.ForAsync(0, blockRanges.Length, async (i, ct) =>
         {
             var blockRange = blockRanges[i];
-            var entries = offsetTable.AsSpan(blockRange);
-            var block = BlockConstructor(entries);
-            await channel.WriteAsync((i, block), ct);
+            var entries = offsetTable.AsMemory(blockRange);
+            var block = await BlockConstructorAsync(i, entries);
+            await channel.WriteAsync(block, ct);
         });
 
         channel.Complete();
     }
 
-    protected CompressedBlock GetCompressedBlock(ReadOnlySpan<OffsetTableEntry> entries)
+    protected async Task<CompressedBlock> GetCompressedBlockAsync(ReadOnlyMemory<OffsetTableEntry> entries)
     {
-        int totalSize = entries.Sum(GetByteCount);
-        var uncompressed = _arrayPool.Rent(totalSize);
+        int totalSize = entries.Span.Sum(GetByteCount);
+        using var uncompressed = _memoryPool.Rent(totalSize);
 
         int position = 0;
-        foreach (var entry in entries)
+        for (int i = 0; i < entries.Length; i++)
         {
+            var entry = entries.Span[i];
             var size = GetByteCount(entry);
-            var buffer = uncompressed.AsSpan(start: position, size);
-            WriteBytes(entry, buffer);
+            var buffer = uncompressed.Memory.Slice(start: position, size);
+            await WriteBytesAsync(entry, buffer);
             position += size;
         }
 
-        var compressed = blockCompressor
-            .Compress(uncompressed.AsSpan(..position));
-
-        _arrayPool.Return(uncompressed);
-        Debug.Assert(totalSize == position);
-
-        return new(compressed, DecompSize: position);
+        return await blockCompressor
+            .CompressAsync(uncompressed.Memory[..position]);
     }
 
     [LoggerMessage(LogLevel.Debug, "Building blocks of type {Type}")]

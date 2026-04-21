@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text;
+using MDictUtils.Extensions;
 
 namespace MDictUtils.BuildModels;
 
@@ -14,15 +16,16 @@ internal readonly record struct KeyData
 (
     int EntryCount,
     CompressedBlock KeyBlockIndex,
-    ImmutableArray<KeyBlock> KeyBlocks
+    ReadOnlyMemory<KeyBlock> KeyBlocks
 )
 {
-    public int KeyBlocksSize => KeyBlocks.Sum(static b => b.Bytes.Length);
+    public int KeyBlocksSize => KeyBlocks.Span.Sum(static b => b.Bytes.Length);
 }
 
-internal readonly record struct CompressedBlock(ImmutableArray<byte> Bytes, long DecompSize)
+internal readonly record struct CompressedBlock(IMemoryOwner<byte> MemoryOwner, int Size, int DecompSize)
 {
-    public int Size => Bytes.Length;
+    public ReadOnlyMemory<byte> Bytes => MemoryOwner.Memory[..Size];
+    public void Dispose() => MemoryOwner.Dispose();
 }
 
 internal readonly record struct OffsetTable
@@ -33,7 +36,7 @@ internal readonly record struct OffsetTable
 )
 {
     public int Length => Entries.Length;
-    public ReadOnlySpan<OffsetTableEntry> AsSpan(Range range) => Entries.AsSpan(range);
+    public ReadOnlyMemory<OffsetTableEntry> AsMemory(Range range) => Entries.AsMemory()[range];
     public Dictionary<string, int> GetFilePathToTotalEntryCount()
     {
         var dict = new Dictionary<string, int>();

@@ -13,7 +13,7 @@ internal sealed partial class OffsetTableBuilder
 )
 {
     private static readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    private static readonly ArrayPool<Range> _rangePool = ArrayPool<Range>.Shared;
+    private static readonly MemoryPool<Range> _rangePool = MemoryPool<Range>.Shared;
 
     public OffsetTable Build(List<MDictEntry> entries)
     {
@@ -71,9 +71,9 @@ internal sealed partial class OffsetTableBuilder
 
     private int GetMaxKeySize(List<MDictEntry> entries)
     {
-        int maxKeySize = entries
-            .DefaultIfEmpty(new("", "", 0, 0))
-            .Max(entry => options.KeyEncoding.GetByteCount(entry.Key));
+        int maxKeySize = entries.Any()
+            ? entries.Max(entry => options.KeyEncoding.GetByteCount(entry.Key))
+            : 0;
 
         // Add the length of one character because
         // we'll be appending a '\0' character later.
@@ -99,7 +99,8 @@ internal sealed partial class OffsetTableBuilder
 
     private ImmutableArray<Range> PartitionTable(ReadOnlySpan<int> entrySizes, int desiredBlockSize)
     {
-        var ranges = _rangePool.Rent(entrySizes.Length);
+        using var memoryOwner = _rangePool.Rent(entrySizes.Length);
+        var ranges = memoryOwner.Memory.Span;
         int start = 0;
         int blockCount = 0;
         long blockSize = 0;
@@ -131,10 +132,7 @@ internal sealed partial class OffsetTableBuilder
                 blockSize += entrySize.Value;
         }
 
-        var entryRanges = ImmutableArray.Create(ranges.AsSpan(..blockCount));
-        _rangePool.Return(ranges);
-
-        return entryRanges;
+        return ImmutableArray.Create(ranges[..blockCount]);
     }
 
     [LoggerMessage(LogLevel.Debug,

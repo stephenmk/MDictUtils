@@ -11,7 +11,7 @@ internal abstract class RecordBlocksBuilder
 )
     : BlocksBuilder<RecordBlock>(logger, blockCompressor), IRecordBlocksBuilder
 {
-    public abstract Task BuildAsync(OffsetTable offsetTable, ChannelWriter<(int, RecordBlock)> channel);
+    public abstract Task BuildAsync(OffsetTable offsetTable, ChannelWriter<RecordBlock> channel);
 
     protected sealed override int GetByteCount(OffsetTableEntry entry)
         => entry.RecordSize;
@@ -19,9 +19,9 @@ internal abstract class RecordBlocksBuilder
     protected sealed override ImmutableArray<Range> GetBlockRanges(OffsetTable offsetTable)
         => offsetTable.RecordBlockRanges;
 
-    protected sealed override RecordBlock BlockConstructor(ReadOnlySpan<OffsetTableEntry> entries)
+    protected sealed override async Task<RecordBlock> BlockConstructorAsync(int id, ReadOnlyMemory<OffsetTableEntry> entries)
     {
-        var block = GetCompressedBlock(entries);
-        return new(block);
+        var block = await GetCompressedBlockAsync(entries);
+        return new(id, block);
     }
 }
