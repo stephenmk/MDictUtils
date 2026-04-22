@@ -115,45 +115,19 @@ public static class MDictPacker
     }
 
     // https://github.com/liuyug/mdict-utils/blob/64e15b99aca786dbf65e5a2274f85547f8029f2e/mdict_utils/writer.py#L509
-    public static List<MDictEntry> PackMddFile(string source)
+    public static List<MDictEntry> PackMdd(string source)
     {
         List<MDictEntry> entries = [];
         source = Path.GetFullPath(source);
 
         if (File.Exists(source))
         {
-            // Single file (wtf is happening with separators?)
-            var info = new FileInfo(source);
-            int size = info.Length < MaxRecordSize
-                ? Convert.ToInt32(info.Length)
-                : throw new InvalidDataException($"File '{info.FullName}' is too large (over {MaxRecordSize:N0} bytes)");
-
-            string key = "\\" + Path.GetFileName(source);
-            if (Path.DirectorySeparatorChar != '\\')
-                key = key.Replace(Path.DirectorySeparatorChar, '\\');
-
-            entries.Add(new(key, Path: source, Pos: 0, size));
+            entries.Add(PackMddFile(source));
         }
         else if (Directory.Exists(source))
         {
-            // Directory walk
-            string relpath = source;
             foreach (var fpath in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
-            {
-                var info = new FileInfo(fpath);
-
-                /// TODO: An error will be thrown later if this length is equal to zero.
-                /// <see cref="Build.Blocks.MddRecordBlocksBuilder.WriteBytesAsync"/>
-                int size = info.Length < MaxRecordSize
-                    ? Convert.ToInt32(info.Length)
-                    : throw new InvalidDataException($"File '{info.FullName}' is too large (over {MaxRecordSize:N0} bytes)");
-
-                string key = "\\" + Path.GetRelativePath(relpath, fpath);
-                if (Path.DirectorySeparatorChar != '\\')
-                    key = key.Replace(Path.DirectorySeparatorChar, '\\');
-
-                entries.Add(new(key, fpath, Pos: 0, size));
-            }
+                entries.Add(PackMddFile(fpath, source));
         }
         else
         {
@@ -163,8 +137,30 @@ public static class MDictPacker
         return entries;
     }
 
+    public static MDictEntry PackMddFile(string fpath, string? basePath = null)
+    {
+        // Single file (wtf is happening with separators?)
+        var info = new FileInfo(fpath);
+
+        /// TODO: An error will be thrown later if this length is equal to zero.
+        /// <see cref="Build.Blocks.MddRecordBlocksBuilder.WriteBytesAsync"/>
+        int size = info.Length < MaxRecordSize
+            ? Convert.ToInt32(info.Length)
+            : throw new InvalidDataException($"File '{info.FullName}' is too large (over {MaxRecordSize:N0} bytes)");
+
+        string relativeName = basePath is not null
+            ? Path.GetRelativePath(basePath, fpath)
+            : Path.GetFileName(fpath);
+        string key = "\\" + relativeName;
+
+        if (Path.DirectorySeparatorChar != '\\')
+            key = key.Replace(Path.DirectorySeparatorChar, '\\');
+
+        return new(key, Path: fpath, Pos: 0, size);
+    }
+
     // https://github.com/liuyug/mdict-utils/blob/master/mdict_utils/writer.py#L425
-    public static List<MDictEntry> PackMdxTxt(string source, Encoding? encoding = null)
+    public static List<MDictEntry> PackMdx(string source, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
         List<MDictEntry> entries = [];

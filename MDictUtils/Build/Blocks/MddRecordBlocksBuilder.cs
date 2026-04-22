@@ -20,7 +20,7 @@ internal sealed class MddRecordBlocksBuilder
         Debug.Assert(entry.RecordPos == 0);
 
         /// TODO: This size check is not enforced when packing the files.
-        /// <see cref="MDictPacker.PackMddFile"/>
+        /// <see cref="MDictPacker.PackMdd"/>
         if (entry.RecordSize < 1)
             throw new InvalidDataException("Size must be >= 1");
 

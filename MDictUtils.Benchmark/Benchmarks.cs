@@ -35,7 +35,7 @@ public class Benchmarks
             }
         }
 
-        Entries.AddRange(MDictPacker.PackMdxTxt(_txtFilePath));
+        Entries.AddRange(MDictPacker.PackMdx(_txtFilePath));
 
         // Initialize MDX file.
         await Writer.WriteAsync(Header, Entries, _mdxFilePath);
@@ -57,7 +57,7 @@ public class Benchmarks
     [Benchmark]
     public void BenchmarkTxtParsing()
     {
-        MDictPacker.PackMdxTxt(_txtFilePath);
+        MDictPacker.PackMdx(_txtFilePath);
     }
 
     [Benchmark]

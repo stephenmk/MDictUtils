@@ -222,7 +222,7 @@ public class DoUndoTests
 
             // Pack it into out.mdx
             var header = new MdxHeader();
-            var packedEntries = MDictPacker.PackMdxTxt(originalDictPath);
+            var packedEntries = MDictPacker.PackMdx(originalDictPath);
             var writer = new ServiceCollection()
                 .AddMdxWriter()
                 .AddTestLogging()
@@ -260,7 +260,7 @@ public class DoUndoTests
             File.WriteAllText(originalStubPath, testContent);
 
             // Pack it into out.mdd
-            var packedEntries = MDictPacker.PackMddFile(originalStubPath);
+            var packedEntries = MDictPacker.PackMdd(originalStubPath);
             var header = new MddHeader();
             var writer = new ServiceCollection()
                 .AddMddWriter()
@@ -348,7 +348,7 @@ public class DoUndoTests
             }
 
             // Pack the entire source directory into out.mdx
-            var packedEntries = MDictPacker.PackMdxTxt(sourceDir);
+            var packedEntries = MDictPacker.PackMdx(sourceDir);
             var header = new MdxHeader();
             var writer = new ServiceCollection()
                 .AddMdxWriter()

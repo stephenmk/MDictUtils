@@ -196,8 +196,8 @@ internal static class Program
             foreach (string AddPath in args.AddPaths)
             {
                 List<MDictEntry> packedAtPath = args.IsMdd
-                      ? MDictPacker.PackMddFile(AddPath)
-                      : MDictPacker.PackMdxTxt(AddPath);
+                      ? MDictPacker.PackMdd(AddPath)
+                      : MDictPacker.PackMdx(AddPath);
                 packed.AddRange(packedAtPath);
             }
 
@@ -227,8 +227,6 @@ internal static class Program
                     });
                 });
             }
-
-            // MDictWriter writer = new(packed, metadata, logging: args.Verbose);
 
             // creates intermediate directories if needed
             // so that it works if MdictPath is a/b/thing.mdx

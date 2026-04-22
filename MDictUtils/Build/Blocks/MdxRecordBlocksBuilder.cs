@@ -28,7 +28,7 @@ internal sealed class MdxRecordBlocksBuilder
         int charByteCount = options.KeyEncodingLength;
 
         /// By design, we expect a minimum size to account for the null-termination character.
-        /// <see cref="MDictPacker.PackMdxTxt"/>
+        /// <see cref="MDictPacker.PackMdx"/>
         if (size < charByteCount)
             throw new InvalidDataException($"Size must be >= {charByteCount}");
 
