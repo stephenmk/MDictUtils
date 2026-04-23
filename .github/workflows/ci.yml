@@ -25,7 +25,7 @@ jobs:
       run: dotnet build --no-restore
 
     - name: Run tests
-      run: dotnet test MDictUtils.Tests/ --no-build --verbosity normal
+      run: dotnet test src/MDictUtils.Tests/ --no-build --verbosity normal
 
   format:
     runs-on: ubuntu-latest

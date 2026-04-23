@@ -1,7 +1,7 @@
 <Solution>
-  <Project Path="MDictUtils/MDictUtils.csproj" />
-  <Project Path="MDictUtils.Cli/MDictUtils.Cli.csproj" />
-  <Project Path="MDictUtils.Tests/MDictUtils.Tests.csproj" />
-  <Project Path="MDictUtils.Creation/MDictUtils.Creation.csproj" />
-  <Project Path="MDictUtils.Benchmark/MDictUtils.Benchmark.csproj" />
+  <Project Path="src/MDictUtils/MDictUtils.csproj" />
+  <Project Path="src/MDictUtils.Cli/MDictUtils.Cli.csproj" />
+  <Project Path="src/MDictUtils.Tests/MDictUtils.Tests.csproj" />
+  <Project Path="src/MDictUtils.Creation/MDictUtils.Creation.csproj" />
+  <Project Path="src/MDictUtils.Benchmark/MDictUtils.Benchmark.csproj" />
 </Solution>
