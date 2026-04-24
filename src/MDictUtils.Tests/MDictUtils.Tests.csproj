@@ -16,4 +16,10 @@
     <ProjectReference Include="..\MDictUtils.Creation\MDictUtils.Creation.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../assets/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
