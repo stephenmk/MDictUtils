@@ -294,74 +294,29 @@ public abstract partial class MDict
 
     protected List<(long, long)> DecodeKeyBlockInfo(ReadOnlySpan<byte> keyBlockInfoCompressed, long decompSize)
     {
-        // SAFETY: check header bytes
-        if (keyBlockInfoCompressed.Length < 4)
+        if (keyBlockInfoCompressed.Length < 8)
         {
             throw new InvalidDataException($"""
                 Key block info is too short.
-                Expected at least 4 bytes.
+                Expected at least 8 bytes.
                 Got {keyBlockInfoCompressed.Length} bytes.
                 """);
         }
 
-        // Expect compression type = 2 (ZLib) in little-endian bytes.
-        if (keyBlockInfoCompressed is not [0x02, 0x00, 0x00, 0x00, ..])
+        var typeBytes = keyBlockInfoCompressed[..4];
+        var typeValue = Common.ReadLittleEndian<uint>(typeBytes, isUnsigned: true);
+
+        var keyBlockInfo = (MDictCompressionType)typeValue switch
         {
-            var actual = string.Join(
-                separator: ", ",
-                values: keyBlockInfoCompressed[..4]
-                    .ToArray()
-                    .Select(static b => $"{b:X2}"));
-
-            throw new InvalidDataException($"""
-                Key block info header mismatch.
-                Expected: [0x02, 0x00, 0x00, 0x00, ..]
-                Actual:   [{actual}, ..]"
-                """);
-        }
-
-        ReadOnlySpan<byte> compressed;
-        if ((_encrypt & 0x02) != 0)
-        {
-            // decrypt if needed
-            // https://github.com/liuyug/mdict-utils/blob/master/mdict_utils/base/readmdict.py#L199
-            //
-            // key = ripemd128(key_block_info_compressed[4:8] + pack(b'<L', 0x3695))
-            // key_block_info_compressed = key_block_info_compressed[:8] + _fast_decrypt(key_block_info_compressed[8:], key)
-            Span<byte> message = stackalloc byte[8];
-            Span<byte> hash = stackalloc byte[16]; // RIPEMD-128 is 16 bytes
-            keyBlockInfoCompressed[4..8].CopyTo(message[..4]);
-            Common.ToLittleEndian(0x3695u, message[4..8]);
-
-            var hashSize = Ripemd128.ComputeHash(message, hash);
-            var key = hash[..hashSize];
-
-            var decryptedSize = keyBlockInfoCompressed.Length - 8;
-            byte[] decrypted = _arrayPool.Rent(decryptedSize);
-            var result = decrypted.AsSpan(..decryptedSize);
-
-            Ripemd128.FastDecrypt(keyBlockInfoCompressed[8..], key, result);
-            byte[] bytes = [.. keyBlockInfoCompressed[..8], .. result];
-            compressed = bytes;
-            _arrayPool.Return(decrypted);
-        }
-        else
-        {
-            compressed = keyBlockInfoCompressed;
-        }
-
-        // decompress zlib
-        var data = compressed[8..];
-        var buffer = new byte[(int)decompSize];
-        ZLibCompression.Decompress(data, buffer);
-        ReadOnlySpan<byte> keyBlockInfo = buffer;
-
-        Span<byte> checksumBuffer = stackalloc byte[4];
-        compressed[4..8].CopyTo(checksumBuffer);
-
-        uint adler32 = Common.ReadBigEndian<uint>(checksumBuffer, true);
-        if (adler32 != Common.Adler32(keyBlockInfo))
-            throw new InvalidDataException("Key block info Adler32 mismatch.");
+            MDictCompressionType.None
+                => NoneCompressionBlock(keyBlockInfoCompressed, decompSize),
+            MDictCompressionType.LZO
+                => throw new NotSupportedException("LZO-compressed key block info."),
+            MDictCompressionType.ZLib
+                => DecompressZlibBlock(keyBlockInfoCompressed, decompSize),
+            _ // Default
+                => throw new InvalidDataException($"Unknown compression type: {typeValue}"),
+        };
 
         // decode key block info
         List<(long, long)> keyBlockInfoList = [];
@@ -405,6 +360,67 @@ public abstract partial class MDict
         return keyBlockInfoList;
     }
 
+    private ReadOnlySpan<byte> NoneCompressionBlock(ReadOnlySpan<byte> keyBlockInfoCompressed, long decompSize)
+    {
+        var uncompressed = keyBlockInfoCompressed[8..];
+
+        if (uncompressed.Length != decompSize)
+            throw new InvalidDataException($"Size of data does not equal expected value {decompSize:N0}");
+
+        var adlerBytes = keyBlockInfoCompressed[4..8];
+        uint adler32 = Common.ReadBigEndian<uint>(adlerBytes, true);
+
+        if (adler32 != Common.Adler32(uncompressed))
+            throw new InvalidDataException("Adler32 checksum mismatch.");
+
+        return uncompressed;
+    }
+
+    private ReadOnlySpan<byte> DecompressZlibBlock(ReadOnlySpan<byte> keyBlockInfoCompressed, long decompSize)
+    {
+        ReadOnlySpan<byte> compressed;
+        if ((_encrypt & 0x02) != 0)
+        {
+            // decrypt if needed
+            // https://github.com/liuyug/mdict-utils/blob/master/mdict_utils/base/readmdict.py#L199
+            //
+            // key = ripemd128(key_block_info_compressed[4:8] + pack(b'<L', 0x3695))
+            // key_block_info_compressed = key_block_info_compressed[:8] + _fast_decrypt(key_block_info_compressed[8:], key)
+            Span<byte> message = stackalloc byte[8];
+            Span<byte> hash = stackalloc byte[16]; // RIPEMD-128 is 16 bytes
+            keyBlockInfoCompressed[4..8].CopyTo(message[..4]);
+            Common.ToLittleEndian(0x3695u, message[4..8]);
+
+            var hashSize = Ripemd128.ComputeHash(message, hash);
+            var key = hash[..hashSize];
+
+            var decryptedSize = keyBlockInfoCompressed.Length - 8;
+            byte[] decrypted = _arrayPool.Rent(decryptedSize);
+            var result = decrypted.AsSpan(..decryptedSize);
+
+            Ripemd128.FastDecrypt(keyBlockInfoCompressed[8..], key, result);
+            compressed = (byte[])[.. keyBlockInfoCompressed[..8], .. result];
+            _arrayPool.Return(decrypted);
+        }
+        else
+        {
+            compressed = keyBlockInfoCompressed;
+        }
+
+        // decompress zlib
+        var uncompressed = new byte[(int)decompSize];
+        ZLibCompression.Decompress(compressed[8..], uncompressed);
+
+        Span<byte> checksumBuffer = stackalloc byte[4];
+        compressed[4..8].CopyTo(checksumBuffer);
+
+        uint adler32 = Common.ReadBigEndian<uint>(checksumBuffer, true);
+        if (adler32 != Common.Adler32(uncompressed))
+            throw new InvalidDataException("Key block info Adler32 mismatch.");
+
+        return uncompressed;
+    }
+
     // _decode_key_block
     protected List<(long, string)> DecodeKeyBlock(ReadOnlySpan<byte> keyBlockCompressed, List<(long, long)> keyBlockInfoList)
     {
@@ -434,7 +450,7 @@ public abstract partial class MDict
         Debug.Assert(input.Length >= 8, "Block too small");
 
         uint info = Common.ReadLittleEndian<uint>(input[..4], true);
-        int compressionMethod = (int)(info & 0xF);
+        var compressionMethod = (MDictCompressionType)info;
         // int encryptionMethod = (int)((info >> 4) & 0xF);
         int encryptionSize = (int)((info >> 8) & 0xFF);
 
@@ -448,8 +464,17 @@ public abstract partial class MDict
         Debug.Assert(encryptionSize <= data.Length, "Invalid encryption size");
 
         // ---- decrypt ---- (assume no encryption)
-        Debug.Assert(compressionMethod == 2);
-        ZLibCompression.Decompress(data, output);
+        switch (compressionMethod)
+        {
+            case MDictCompressionType.None:
+                data.CopyTo(output);
+                break;
+            case MDictCompressionType.ZLib:
+                ZLibCompression.Decompress(data, output);
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported compression type {compressionMethod}");
+        }
 
         Debug.Assert(adler32 == Common.Adler32(output), "Adler32 mismatch after decompression");
     }
@@ -461,33 +486,25 @@ public abstract partial class MDict
         List<(long, string)> keyList = [];
         int keyStartIndex = 0;
 
-        Span<byte> idBytesBuffer = stackalloc byte[8];
-
-        ReadOnlySpan<byte> utf16delimiter = [0x00, 0x00];
-        ReadOnlySpan<byte> utf8delimiter = [0x00];
+        ReadOnlySpan<byte> keyDelimiter = _encoding.GetBytes("\0");
+        int width = keyDelimiter.Length;
 
         while (keyStartIndex < keyBlock.Length)
         {
             Debug.Assert(keyStartIndex + _numberWidth <= keyBlock.Length, "Unexpected end of key block while reading key ID");
 
-            var idBytes = idBytesBuffer[.._numberWidth];
-            keyBlock.Slice(keyStartIndex, _numberWidth).CopyTo(idBytes);
+            var idBytes = keyBlock.Slice(keyStartIndex, _numberWidth);
 
             long keyId = (_numberWidth == 4)
                 ? Common.ReadBigEndian<int>(idBytes, false)
                 : Common.ReadBigEndian<long>(idBytes, false);
-
-            var delimiter = _encoding == Encoding.Unicode
-                ? utf16delimiter
-                : utf8delimiter;
-            int width = delimiter.Length;
 
             // Find the end of the key text
             int i = keyStartIndex + _numberWidth;
             int keyEndIndex = -1;
             while (i <= keyBlock.Length - width)
             {
-                if (keyBlock.Slice(i, width).SequenceEqual(delimiter))
+                if (keyBlock.Slice(i, width).SequenceEqual(keyDelimiter))
                 {
                     keyEndIndex = i;
                     break;

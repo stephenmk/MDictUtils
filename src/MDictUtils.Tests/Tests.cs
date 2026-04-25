@@ -184,47 +184,100 @@ public class DoUndoTests
         Assert.Equal(normalizedExpected, normalizedActual);
     }
 
-    public static TheoryData<string> TestContents => new()
-        {
-            """
-            single
-            Just one entry.
-            </>
-            """,
+    private static readonly string[] TestContents =
+    [
+        """
+        single
+        Just one entry.
+        </>
+        """,
 
-            """
-            apple
-            A fruit that grows on trees.
-            </>
-            banana
-            A long yellow fruit.
-            </>
-            @cc-100
-            xxx
-            </>
-            """,
-        };
+        """
+        apple
+        A fruit that grows on trees.
+        </>
+        banana
+        A long yellow fruit.
+        </>
+        @cc-100
+        xxx
+        </>
+        """,
+    ];
+
+    private static readonly MDictCompressionType[] TestCompressionTypes =
+    [
+        MDictCompressionType.None,
+        MDictCompressionType.ZLib,
+    ];
+
+    private static readonly MDictKeyEncodingType[] TestEncodingTypes =
+    [
+        MDictKeyEncodingType.Utf8,
+        MDictKeyEncodingType.Utf16,
+    ];
+
+    public static TheoryData<string, MDictCompressionType, MDictKeyEncodingType> MdxTheoryData
+    {
+        get
+        {
+            TheoryData<string, MDictCompressionType, MDictKeyEncodingType> items = [];
+            foreach (var testContent in TestContents)
+                foreach (var compressionType in TestCompressionTypes)
+                    foreach (var encodingType in TestEncodingTypes)
+                        items.Add(testContent, compressionType, encodingType);
+            return items;
+        }
+    }
+
+    public static TheoryData<string, MDictCompressionType> MddTheoryData
+    {
+        get
+        {
+            TheoryData<string, MDictCompressionType> items = [];
+            foreach (var testContent in TestContents)
+                foreach (var compressionType in TestCompressionTypes)
+                    items.Add(testContent, compressionType);
+            return items;
+        }
+    }
 
     [Theory]
-    [MemberData(nameof(TestContents))]
-    public async Task DoUndo_PackAndUnpackMdx_ProducesIdenticalFile(string testContent)
+    [MemberData(nameof(MdxTheoryData))]
+    public async Task DoUndo_PackAndUnpackMdx_ProducesIdenticalFile
+    (
+        string testContent,
+        MDictCompressionType compType,
+        MDictKeyEncodingType encodingType
+    )
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
         string originalDictPath = Path.Combine(tempDir, "dict1.txt");
         string outMdxPath = Path.Combine(tempDir, "out.mdx");
         string extractedDictPath = Path.Combine(tempDir, "out.mdx.txt");
+        Directory.CreateDirectory(tempDir);
+
+        var encoding = encodingType switch
+        {
+            MDictKeyEncodingType.Utf8 => Encoding.UTF8,
+            MDictKeyEncodingType.Utf16 => Encoding.Unicode,
+            _ => throw new ArgumentOutOfRangeException(nameof(encodingType))
+        };
 
         try
         {
             // Create dict1.txt
-            File.WriteAllText(originalDictPath, testContent);
+            File.WriteAllText(originalDictPath, testContent, encoding);
 
             // Pack it into out.mdx
             var header = new MdxHeader();
-            var packedEntries = MDictPacker.PackMdx(originalDictPath);
+            var packedEntries = MDictPacker.PackMdx(originalDictPath, encoding);
             var writer = new ServiceCollection()
-                .AddMdxWriter()
+                .AddMdxWriter(options =>
+                {
+                    options.CompressionType = compType;
+                    options.KeyEncoding = encodingType;
+                })
                 .AddTestLogging()
                 .BuildServiceProvider()
                 .GetRequiredService<IMdxWriter>();
@@ -232,9 +285,9 @@ public class DoUndoTests
             await writer.WriteAsync(header, packedEntries, outMdxPath);
 
             // Unpack out1.mdx to tempDir and compare normalized
-            MDictPacker.Unpack(tempDir, outMdxPath, isMdd: false);
+            MDictPacker.Unpack(tempDir, outMdxPath, isMdd: false, encoding);
             Assert.True(File.Exists(extractedDictPath), "Extracted file should exist");
-            string extractedContent = File.ReadAllText(extractedDictPath);
+            string extractedContent = File.ReadAllText(extractedDictPath, encoding);
             AssertContentEqual(testContent, extractedContent);
         }
         finally
@@ -245,49 +298,12 @@ public class DoUndoTests
     }
 
     [Theory]
-    [MemberData(nameof(TestContents))]
-    public async Task DoUndo_PackAndUnpackMdx_ProducesIdenticalFile_Utf16(string testContent)
-    {
-        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        string originalDictPath = Path.Combine(tempDir, "dict1.txt");
-        string outMdxPath = Path.Combine(tempDir, "out.mdx");
-        string extractedDictPath = Path.Combine(tempDir, "out.mdx.txt");
-
-        try
-        {
-            // Create dict1.txt
-            File.WriteAllText(originalDictPath, testContent, Encoding.Unicode);
-
-            // Pack it into out.mdx
-            var header = new MdxHeader() { Encoding = "UTF-16" };
-            var packedEntries = MDictPacker.PackMdx(originalDictPath, Encoding.Unicode);
-            var writer = new ServiceCollection()
-                .AddMdxWriter(options => options.KeyEncoding = MDictKeyEncodingType.Utf16)
-                .AddTestLogging()
-                .BuildServiceProvider()
-                .GetRequiredService<IMdxWriter>();
-
-            await writer.WriteAsync(header, packedEntries, outMdxPath);
-
-            // Unpack out1.mdx to tempDir and compare normalized
-            MDictPacker.Unpack(tempDir, outMdxPath, isMdd: false, Encoding.Unicode);
-            Assert.True(File.Exists(extractedDictPath), "Extracted file should exist");
-            string extractedContent = File.ReadAllText(extractedDictPath, Encoding.Unicode);
-            // Console.Error.WriteLine(testContent);
-            // Console.Error.WriteLine(extractedContent);
-            AssertContentEqual(testContent, extractedContent);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-                Directory.Delete(tempDir, recursive: true);
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(TestContents))]
-    public async Task DoUndo_PackAndUnpackMdd_ProducesIdenticalFile(string testContent)
+    [MemberData(nameof(MddTheoryData))]
+    public async Task DoUndo_PackAndUnpackMdd_ProducesIdenticalFile
+    (
+        string testContent,
+        MDictCompressionType compType
+    )
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -304,7 +320,7 @@ public class DoUndoTests
             var packedEntries = MDictPacker.PackMdd(originalStubPath);
             var header = new MddHeader();
             var writer = new ServiceCollection()
-                .AddMddWriter()
+                .AddMddWriter(options => options.CompressionType = compType)
                 .AddTestLogging()
                 .BuildServiceProvider()
                 .GetRequiredService<IMddWriter>();

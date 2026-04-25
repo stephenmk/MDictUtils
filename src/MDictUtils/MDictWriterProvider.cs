@@ -107,9 +107,11 @@ public static class ServiceCollectionExtensions
         {
             MDictCompressionType.None
                 => services.AddTransient<IBlockCompressor, NoneBlockCompressor>(),
+            MDictCompressionType.LZO
+                => throw new NotSupportedException("LZO compression is not supported"),
             MDictCompressionType.ZLib
                 => services.AddTransient<IBlockCompressor, ZLibBlockCompressor>(),
             _ // Default
-                => throw new NotSupportedException($"Unsupported compression type `{compressionType}`")
+                => throw new NotSupportedException($"Unknown compression type `{compressionType}`")
         };
 }
