@@ -217,8 +217,7 @@ public class DoUndoTests
         MDictKeyEncodingType.Utf16,
     ];
 
-    public static TheoryData<string> TheoryContents => new(TestContents);
-    public static TheoryData<string, MDictCompressionType, MDictKeyEncodingType> TheoryContentAndCompressionTypes
+    public static TheoryData<string, MDictCompressionType, MDictKeyEncodingType> MdxTheoryData
     {
         get
         {
@@ -231,8 +230,20 @@ public class DoUndoTests
         }
     }
 
+    public static TheoryData<string, MDictCompressionType> MddTheoryData
+    {
+        get
+        {
+            TheoryData<string, MDictCompressionType> items = [];
+            foreach (var testContent in TestContents)
+                foreach (var compressionType in TestCompressionTypes)
+                    items.Add(testContent, compressionType);
+            return items;
+        }
+    }
+
     [Theory]
-    [MemberData(nameof(TheoryContentAndCompressionTypes))]
+    [MemberData(nameof(MdxTheoryData))]
     public async Task DoUndo_PackAndUnpackMdx_ProducesIdenticalFile
     (
         string testContent,
@@ -287,8 +298,12 @@ public class DoUndoTests
     }
 
     [Theory]
-    [MemberData(nameof(TheoryContents))]
-    public async Task DoUndo_PackAndUnpackMdd_ProducesIdenticalFile(string testContent)
+    [MemberData(nameof(MddTheoryData))]
+    public async Task DoUndo_PackAndUnpackMdd_ProducesIdenticalFile
+    (
+        string testContent,
+        MDictCompressionType compType
+    )
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -305,7 +320,7 @@ public class DoUndoTests
             var packedEntries = MDictPacker.PackMdd(originalStubPath);
             var header = new MddHeader();
             var writer = new ServiceCollection()
-                .AddMddWriter()
+                .AddMddWriter(options => options.CompressionType = compType)
                 .AddTestLogging()
                 .BuildServiceProvider()
                 .GetRequiredService<IMddWriter>();
