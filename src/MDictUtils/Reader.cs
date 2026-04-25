@@ -481,33 +481,25 @@ public abstract partial class MDict
         List<(long, string)> keyList = [];
         int keyStartIndex = 0;
 
-        Span<byte> idBytesBuffer = stackalloc byte[8];
-
-        ReadOnlySpan<byte> utf16delimiter = [0x00, 0x00];
-        ReadOnlySpan<byte> utf8delimiter = [0x00];
+        ReadOnlySpan<byte> keyDelimiter = _encoding.GetBytes("\0");
+        int width = keyDelimiter.Length;
 
         while (keyStartIndex < keyBlock.Length)
         {
             Debug.Assert(keyStartIndex + _numberWidth <= keyBlock.Length, "Unexpected end of key block while reading key ID");
 
-            var idBytes = idBytesBuffer[.._numberWidth];
-            keyBlock.Slice(keyStartIndex, _numberWidth).CopyTo(idBytes);
+            var idBytes = keyBlock.Slice(keyStartIndex, _numberWidth);
 
             long keyId = (_numberWidth == 4)
                 ? Common.ReadBigEndian<int>(idBytes, false)
                 : Common.ReadBigEndian<long>(idBytes, false);
-
-            var delimiter = _encoding == Encoding.Unicode
-                ? utf16delimiter
-                : utf8delimiter;
-            int width = delimiter.Length;
 
             // Find the end of the key text
             int i = keyStartIndex + _numberWidth;
             int keyEndIndex = -1;
             while (i <= keyBlock.Length - width)
             {
-                if (keyBlock.Slice(i, width).SequenceEqual(delimiter))
+                if (keyBlock.Slice(i, width).SequenceEqual(keyDelimiter))
                 {
                     keyEndIndex = i;
                     break;
