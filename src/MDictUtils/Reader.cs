@@ -464,12 +464,17 @@ public abstract partial class MDict
         Debug.Assert(encryptionSize <= data.Length, "Invalid encryption size");
 
         // ---- decrypt ---- (assume no encryption)
-        if (compressionMethod == MDictCompressionType.None)
-            data.CopyTo(output);
-        else if (compressionMethod == MDictCompressionType.ZLib)
-            ZLibCompression.Decompress(data, output);
-        else
-            throw new NotSupportedException($"Unsupported compression type {compressionMethod}");
+        switch (compressionMethod)
+        {
+            case MDictCompressionType.None:
+                data.CopyTo(output);
+                break;
+            case MDictCompressionType.ZLib:
+                ZLibCompression.Decompress(data, output);
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported compression type {compressionMethod}");
+        }
 
         Debug.Assert(adler32 == Common.Adler32(output), "Adler32 mismatch after decompression");
     }
